@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Surfaces — cool neutral, low chroma, so score colours carry the meaning */
+    --background: 210 20% 98%;
+    --foreground: 215 28% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 28% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 28% 17%;
+
+    /* Brand — deep navy chrome with a teal accent */
+    --primary: 209 68% 24%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 215 28% 17%;
+    --accent: 187 72% 32%;
+    --accent-foreground: 0 0% 100%;
+
+    --muted: 210 20% 95%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Semantic */
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 32%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 90% 44%;
+    --warning-foreground: 0 0% 100%;
+    --info: 213 82% 45%;
+    --info-foreground: 0 0% 100%;
+
+    /* Score bands — PURSUE_NOW / PURSUE / REVIEW / DEPRIORITIZE */
+    --band-pursue: 152 60% 32%;
+    --band-strong: 199 78% 36%;
+    --band-review: 32 90% 44%;
+    --band-low: 215 16% 47%;
+
+    /* Sidebar chrome */
+    --sidebar: 212 47% 13%;
+    --sidebar-foreground: 210 24% 89%;
+    --sidebar-muted: 213 20% 62%;
+    --sidebar-active: 187 72% 32%;
+    --sidebar-border: 213 33% 22%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 187 72% 32%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 215 32% 10%;
+    --foreground: 210 24% 92%;
+    --card: 215 30% 13%;
+    --card-foreground: 210 24% 92%;
+    --popover: 215 30% 13%;
+    --popover-foreground: 210 24% 92%;
+
+    --primary: 199 72% 52%;
+    --primary-foreground: 215 32% 10%;
+    --secondary: 215 26% 19%;
+    --secondary-foreground: 210 24% 92%;
+    --accent: 187 62% 44%;
+    --accent-foreground: 215 32% 10%;
+
+    --muted: 215 26% 19%;
+    --muted-foreground: 215 15% 65%;
+
+    --destructive: 0 68% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 50% 45%;
+    --success-foreground: 215 32% 10%;
+    --warning: 36 84% 55%;
+    --warning-foreground: 215 32% 10%;
+    --info: 213 78% 60%;
+    --info-foreground: 215 32% 10%;
+
+    --band-pursue: 152 50% 45%;
+    --band-strong: 199 70% 52%;
+    --band-review: 36 84% 55%;
+    --band-low: 215 15% 60%;
+
+    --sidebar: 216 40% 9%;
+    --sidebar-foreground: 210 24% 89%;
+    --sidebar-muted: 213 18% 58%;
+    --sidebar-active: 187 62% 44%;
+    --sidebar-border: 214 30% 18%;
+
+    --border: 215 24% 22%;
+    --input: 215 24% 22%;
+    --ring: 187 62% 44%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Numeric columns line up when digits are tabular — matters for rate,
+     margin and score tables where the eye scans a column. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer components {
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-muted;
+  }
+
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/25 to-transparent;
+    content: '';
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}

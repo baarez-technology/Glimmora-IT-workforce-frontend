@@ -1,10 +1,11 @@
 'use client';
 
-import { AlertTriangle, ArrowRight, ChevronDown, UserX } from 'lucide-react';
+import { AlertTriangle, ArrowRight, ChevronDown, MessageSquare, UserX } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
+import { CommunicationLog, DecisionForm } from '@/components/pipeline/opportunity-detail';
 import {
   EmptyState,
   ErrorState,
@@ -137,6 +138,7 @@ function OpportunityCard({
   canWrite: boolean;
 }) {
   const [moving, setMoving] = React.useState(false);
+  const [showDetail, setShowDetail] = React.useState(false);
   const [showHistory, setShowHistory] = React.useState(false);
   const history = useOpportunityHistory(showHistory ? opportunity.id : undefined);
 
@@ -213,6 +215,17 @@ function OpportunityCard({
                   : 'Change stage'}
               </Button>
             ) : null}
+            {canWrite ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDetail((value) => !value)}
+                aria-expanded={showDetail}
+              >
+                <MessageSquare aria-hidden />
+                Decide &amp; log
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               size="sm"
@@ -227,6 +240,13 @@ function OpportunityCard({
             </Button>
           </div>
         )}
+
+        {showDetail ? (
+          <div className="space-y-2">
+            <DecisionForm opportunity={opportunity} />
+            <CommunicationLog opportunityId={opportunity.id} />
+          </div>
+        ) : null}
 
         {showHistory ? (
           history.isLoading ? (

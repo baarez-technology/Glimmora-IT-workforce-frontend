@@ -41,7 +41,7 @@ import type { Role } from '@/types/api';
  * CURRENT_PHASE renders an honest "not built yet" page rather than a dead link —
  * navigation is never a fake button.
  */
-export const CURRENT_PHASE = 11;
+export const CURRENT_PHASE = 12;
 
 export interface NavItem {
   label: string;
@@ -316,6 +316,7 @@ export const NAVIGATION: NavSection[] = [
         href: '/notifications',
         icon: Bell,
         phase: 12,
+        permission: 'notification:read',
         description: 'SLA, document expiry, bench and interview alerts',
       },
     ],
@@ -357,6 +358,14 @@ export const NAVIGATION: NavSection[] = [
         roles: ['ADMIN', 'MANAGEMENT'],
         permission: 'audit:view',
         description: 'Who changed what, and when',
+      },
+      {
+        label: 'Import & Export',
+        href: '/admin/data',
+        icon: FileStack,
+        phase: 12,
+        permission: 'export:run',
+        description: 'Excel import with a preview step, and filtered exports',
       },
       {
         label: 'System Status',

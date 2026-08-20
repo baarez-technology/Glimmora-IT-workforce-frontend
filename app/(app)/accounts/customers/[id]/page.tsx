@@ -7,7 +7,10 @@ import * as React from 'react';
 import { toast } from 'sonner';
 
 import { ActivityTimeline } from '@/components/accounts/activity-timeline';
+import { AddRouteDialog } from '@/components/accounts/add-route-dialog';
 import { AddressabilityCard } from '@/components/accounts/addressability-card';
+import { CreateContactDialog } from '@/components/accounts/create-contact-dialog';
+import { CreateProjectDialog } from '@/components/accounts/create-project-dialog';
 import { LogActivityDialog } from '@/components/accounts/log-activity-dialog';
 import { PageHeader } from '@/components/layout/page-header';
 import {
@@ -44,6 +47,9 @@ export default function AccountDetailPage() {
   const can = useAuthStore((state) => state.can);
 
   const [logOpen, setLogOpen] = React.useState(false);
+  const [contactOpen, setContactOpen] = React.useState(false);
+  const [projectOpen, setProjectOpen] = React.useState(false);
+  const [routeOpen, setRouteOpen] = React.useState(false);
 
   const account = useAccount(accountId);
   const routes = useAccountRoutes(accountId);
@@ -165,8 +171,14 @@ export default function AccountDetailPage() {
 
             <TabsContent value="routes">
               <Card>
-                <CardHeader>
+                <CardHeader className="flex-row items-center justify-between space-y-0">
                   <CardTitle>How we reach this account</CardTitle>
+                  {can('account:update') && (
+                    <Button size="sm" onClick={() => setRouteOpen(true)}>
+                      <Plus aria-hidden />
+                      Add route
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent>
                   {routes.isLoading ? (
@@ -217,7 +229,16 @@ export default function AccountDetailPage() {
 
             <TabsContent value="contacts">
               <Card>
-                <CardContent className="pt-5">
+                <CardHeader className="flex-row items-center justify-between space-y-0">
+                  <CardTitle>People at this account</CardTitle>
+                  {can('contact:write') && (
+                    <Button size="sm" onClick={() => setContactOpen(true)}>
+                      <Plus aria-hidden />
+                      Add contact
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
                   {contacts.data && contacts.data.items.length > 0 ? (
                     <ul className="divide-y">
                       {contacts.data.items.map((contact) => (
@@ -251,7 +272,16 @@ export default function AccountDetailPage() {
 
             <TabsContent value="projects">
               <Card>
-                <CardContent className="pt-5">
+                <CardHeader className="flex-row items-center justify-between space-y-0">
+                  <CardTitle>Projects at this account</CardTitle>
+                  {can('project:write') && (
+                    <Button size="sm" onClick={() => setProjectOpen(true)}>
+                      <Plus aria-hidden />
+                      Add project
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
                   {projects.data && projects.data.items.length > 0 ? (
                     <ul className="divide-y">
                       {projects.data.items.map((project) => (
@@ -312,7 +342,20 @@ export default function AccountDetailPage() {
       </div>
 
       {accountId && (
-        <LogActivityDialog open={logOpen} onOpenChange={setLogOpen} accountId={accountId} />
+        <>
+          <LogActivityDialog open={logOpen} onOpenChange={setLogOpen} accountId={accountId} />
+          <CreateContactDialog
+            open={contactOpen}
+            onOpenChange={setContactOpen}
+            accountId={accountId}
+          />
+          <CreateProjectDialog
+            open={projectOpen}
+            onOpenChange={setProjectOpen}
+            accountId={accountId}
+          />
+          <AddRouteDialog open={routeOpen} onOpenChange={setRouteOpen} accountId={accountId} />
+        </>
       )}
     </>
   );

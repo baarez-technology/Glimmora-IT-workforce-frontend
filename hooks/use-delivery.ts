@@ -140,6 +140,25 @@ export function useGenerateProjections() {
   });
 }
 
+/** Record a month by hand — for a period no projection covers. */
+export function useCreateBillingRecord() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) =>
+      api.post<BillingRecord>('/billing/records', input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateBillingRecord(recordId: string) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) =>
+      api.patch<BillingRecord>(`/billing/records/${recordId}`, input),
+    onSuccess: invalidate,
+  });
+}
+
 export function useConfirmBilling(recordId: string) {
   const invalidate = useInvalidate();
   return useMutation({

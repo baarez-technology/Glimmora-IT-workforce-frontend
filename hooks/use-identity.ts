@@ -91,6 +91,27 @@ export function useDeactivateUser() {
 
 /* ------------------------------------------------------------------- roles */
 
+/**
+ * Reset another user's password.
+ *
+ * `must_change_password` defaults true: an administrator setting a temporary
+ * password should never leave it usable indefinitely.
+ */
+export function useResetPassword() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { userId: string; new_password: string }) =>
+      api.post<UserSummary>(`/users/${input.userId}/reset-password`, {
+        new_password: input.new_password,
+        must_change_password: true,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['users'] });
+      void queryClient.invalidateQueries({ queryKey: ['audit'] });
+    },
+  });
+}
+
 export function useRoleCatalogue() {
   return useQuery({
     queryKey: identityKeys.roles(),

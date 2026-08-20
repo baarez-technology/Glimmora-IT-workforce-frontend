@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Interviews } from '@/components/pipeline/interviews';
 import { PipelineBoard } from '@/components/pipeline/pipeline-board';
+import { DecisionForm } from '@/components/pipeline/opportunity-detail';
 import { Submissions } from '@/components/pipeline/submissions';
 import { useAuthStore } from '@/lib/auth-store';
 import {
@@ -178,6 +179,7 @@ beforeEach(() =>
     'submission:write',
     'interview:read',
     'interview:write',
+    'deployment:write',
     'requirement:read',
     'resource:read',
   ]),
@@ -446,6 +448,101 @@ describe('submissions', () => {
     await waitFor(() =>
       expect(screen.getByText(/No CVs have been submitted yet/i)).toBeInTheDocument(),
     );
+  });
+});
+
+describe('handover to delivery', () => {
+  it('offers Deploy only on a selected submission', async () => {
+    // The pipeline used to end at SELECTED with no button — a dead end.
+    vi.stubGlobal(
+      'fetch',
+      mockApi({
+        submissions: [
+          makeSubmission({ id: 'a', status: 'SELECTED' }),
+          makeSubmission({ id: 'b', status: 'SUBMITTED', resource_name: 'Not selected yet' }),
+        ],
+      }),
+    );
+    render(<Submissions />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Not selected yet')).toBeInTheDocument());
+    expect(screen.getAllByRole('button', { name: /^Deploy$/ })).toHaveLength(1);
+  });
+
+  it('explains that the rates are copied onto the deployment', async () => {
+    vi.stubGlobal('fetch', mockApi({ submissions: [makeSubmission({ status: 'SELECTED' })] }));
+    render(<Submissions />, { wrapper });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Deploy$/ })).toBeInTheDocument(),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^Deploy$/ }));
+
+    expect(screen.getByText(/rates are copied onto the deployment/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create deployment/i })).toBeEnabled();
+  });
+
+  it('rejects an end date before the start', async () => {
+    vi.stubGlobal('fetch', mockApi({ submissions: [makeSubmission({ status: 'SELECTED' })] }));
+    render(<Submissions />, { wrapper });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Deploy$/ })).toBeInTheDocument(),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^Deploy$/ }));
+
+    const end = screen.getByLabelText('End date');
+    await userEvent.clear(end);
+    await userEvent.type(end, '2020-01-01');
+
+    expect(screen.getByText(/cannot be before the start/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create deployment/i })).toBeDisabled();
+  });
+
+  it('hides Deploy from a role that cannot write deployments', async () => {
+    signIn(['submission:read', 'submission:write']);
+    vi.stubGlobal('fetch', mockApi({ submissions: [makeSubmission({ status: 'SELECTED' })] }));
+    render(<Submissions />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Rahul Menon')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /^Deploy$/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('opportunity decision', () => {
+  it('is presented as separate from the stage', () => {
+    vi.stubGlobal('fetch', mockApi());
+    render(<DecisionForm opportunity={makeOpportunity()} />, { wrapper });
+
+    expect(screen.getByText(/A decision is not a stage move/i)).toBeInTheDocument();
+    expect(screen.getByText(/No decision recorded/i)).toBeInTheDocument();
+  });
+
+  it('requires a reason before declining', async () => {
+    vi.stubGlobal('fetch', mockApi());
+    render(<DecisionForm opportunity={makeOpportunity()} />, { wrapper });
+
+    await userEvent.selectOptions(screen.getByLabelText('Decision'), 'DECLINE');
+    expect(screen.getByRole('button', { name: /Record decision/i })).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText(/Reason \(required\)/), 'Rate too low');
+    expect(screen.getByRole('button', { name: /Record decision/i })).toBeEnabled();
+  });
+
+  it('shows an existing decision and its reason', () => {
+    vi.stubGlobal('fetch', mockApi());
+    render(
+      <DecisionForm
+        opportunity={makeOpportunity({
+          decision: 'DECLINE',
+          decision_reason: 'No route into the account',
+          decided_at: '2026-08-19T09:00:00Z',
+        })}
+      />,
+      { wrapper },
+    );
+
+    expect(screen.getByText(/No route into the account/)).toBeInTheDocument();
   });
 });
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { AlertTriangle, ChevronDown, Send, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Briefcase, ChevronDown, Send, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
+import { DeployForm } from '@/components/pipeline/deploy-dialog';
 import {
   EmptyState,
   ErrorState,
@@ -258,10 +259,22 @@ function StatusForm({ submission, onDone }: { submission: Submission; onDone: ()
   );
 }
 
-function SubmissionRow({ submission, canWrite }: { submission: Submission; canWrite: boolean }) {
+function SubmissionRow({
+  submission,
+  canWrite,
+  canDeploy,
+}: {
+  submission: Submission;
+  canWrite: boolean;
+  canDeploy: boolean;
+}) {
   const [editing, setEditing] = React.useState(false);
+  const [deploying, setDeploying] = React.useState(false);
   const [showHistory, setShowHistory] = React.useState(false);
   const history = useSubmissionHistory(showHistory ? submission.id : undefined);
+
+  // The pipeline hands over to delivery here, and only here.
+  const deployable = canDeploy && submission.status === 'SELECTED';
 
   return (
     <>
@@ -303,6 +316,12 @@ function SubmissionRow({ submission, canWrite }: { submission: Submission; canWr
         </TableCell>
         <TableCell className="text-right">
           <div className="flex justify-end gap-1">
+            {deployable ? (
+              <Button size="sm" onClick={() => setDeploying((value) => !value)}>
+                <Briefcase aria-hidden />
+                Deploy
+              </Button>
+            ) : null}
             {canWrite ? (
               <Button variant="outline" size="sm" onClick={() => setEditing((value) => !value)}>
                 Update
@@ -323,10 +342,13 @@ function SubmissionRow({ submission, canWrite }: { submission: Submission; canWr
         </TableCell>
       </TableRow>
 
-      {editing || showHistory ? (
+      {editing || showHistory || deploying ? (
         <TableRow>
           <TableCell colSpan={6} className="bg-muted/20">
             <div className="space-y-3">
+              {deploying ? (
+                <DeployForm submission={submission} onDone={() => setDeploying(false)} />
+              ) : null}
               {editing ? (
                 <StatusForm submission={submission} onDone={() => setEditing(false)} />
               ) : null}
@@ -380,6 +402,7 @@ export function Submissions() {
   if (!can('submission:read')) return <PermissionDeniedState />;
 
   const canWrite = can('submission:write');
+  const canDeploy = can('deployment:write');
   const rows = submissions.data ?? [];
 
   return (
@@ -457,6 +480,7 @@ export function Submissions() {
                     key={submission.id}
                     submission={submission}
                     canWrite={canWrite}
+                    canDeploy={canDeploy}
                   />
                 ))}
               </TableBody>

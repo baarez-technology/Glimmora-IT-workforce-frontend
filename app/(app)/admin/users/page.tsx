@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, ShieldOff, UserPlus } from 'lucide-react';
+import { KeyRound, Lock, ShieldOff, UserPlus } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -26,7 +26,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { CreateUserDialog } from '@/components/admin/create-user-dialog';
-import { useDeactivateUser, useUsers, useUpdateUser, type UserQuery } from '@/hooks/use-identity';
+import {
+  useDeactivateUser,
+  useResetPassword,
+  useUsers,
+  useUpdateUser,
+  type UserQuery,
+} from '@/hooks/use-identity';
 import { ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatDateTime, formatRelative } from '@/lib/format';
@@ -52,6 +58,7 @@ export default function AdminUsersPage() {
   const users = useUsers(query);
   const updateUser = useUpdateUser();
   const deactivateUser = useDeactivateUser();
+  const resetPassword = useResetPassword();
 
   const canRead = can('user:read');
   const canWrite = can('user:update');
@@ -65,6 +72,26 @@ export default function AdminUsersPage() {
       toast.success(`${user.full_name} is now ${ROLE_LABELS[role]}`);
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'The role could not be changed.');
+    }
+  };
+
+  const onResetPassword = async (user: UserSummary) => {
+    // Generated here rather than typed, so an administrator never invents a
+    // weak one — and it is shown once, never stored anywhere we can read back.
+    const temporary = `Glimmora-${Math.random().toString(36).slice(2, 10)}-${new Date().getFullYear()}!`;
+    try {
+      await resetPassword.mutateAsync({ userId: user.id, new_password: temporary });
+      toast.success(
+        `Temporary password for ${user.full_name}: ${temporary}`,
+        {
+          description: 'Shown once. They must change it at next sign-in.',
+          duration: 30_000,
+        },
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError ? error.message : 'The password could not be reset.',
+      );
     }
   };
 
@@ -235,17 +262,30 @@ export default function AdminUsersPage() {
                       </TableCell>
 
                       <TableCell className="text-right">
-                        {canWrite && user.is_active && !isSelf && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => void onDeactivate(user)}
-                            loading={deactivateUser.isPending}
-                          >
-                            <ShieldOff aria-hidden />
-                            Deactivate
-                          </Button>
-                        )}
+                        <div className="flex justify-end gap-1">
+                          {canWrite && user.is_active && !isSelf && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void onResetPassword(user)}
+                              loading={resetPassword.isPending}
+                            >
+                              <KeyRound aria-hidden />
+                              Reset password
+                            </Button>
+                          )}
+                          {canWrite && user.is_active && !isSelf && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void onDeactivate(user)}
+                              loading={deactivateUser.isPending}
+                            >
+                              <ShieldOff aria-hidden />
+                              Deactivate
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

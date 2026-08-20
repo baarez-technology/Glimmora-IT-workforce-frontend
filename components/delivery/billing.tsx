@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Info, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Info, PlusCircle, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
@@ -26,6 +26,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  useCreateBillingRecord,
+  useDeployments,
   useBillingHeadline,
   useBillingRecords,
   useBillingSummary,
@@ -259,6 +261,142 @@ function RevenueTrend({ months = 12 }: { months?: number }) {
   );
 }
 
+
+/**
+ * Record a month by hand.
+ *
+ * The SOW asks for billing to be "lightweight — manual entry or Excel import".
+ * Projections cover the common case, but a month that predates the system or an
+ * ad-hoc invoice still has to be recordable, or the headline revenue figure is
+ * only ever as complete as the generator.
+ */
+function ManualEntryForm({ onDone }: { onDone: () => void }) {
+  const now = new Date();
+  const [deploymentId, setDeploymentId] = React.useState('');
+  const [year, setYear] = React.useState(String(now.getFullYear()));
+  const [month, setMonth] = React.useState(String(now.getMonth() + 1));
+  const [revenue, setRevenue] = React.useState('');
+  const [cost, setCost] = React.useState('');
+  const [notes, setNotes] = React.useState('');
+
+  const deployments = useDeployments();
+  const create = useCreateBillingRecord();
+
+  const profit = Number(revenue || 0) - Number(cost || 0);
+  const margin = Number(revenue) > 0 ? (profit / Number(revenue)) * 100 : null;
+
+  return (
+    <Card className="mb-4">
+      <CardContent className="space-y-4 p-4">
+        <p className="text-sm font-medium">Record a month by hand</p>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1.5 lg:col-span-2">
+            <Label htmlFor="manual-deployment">Deployment</Label>
+            <Select
+              id="manual-deployment"
+              value={deploymentId}
+              onChange={(event) => setDeploymentId(event.target.value)}
+            >
+              <option value="">Select…</option>
+              {(deployments.data ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.resource_name} — {item.role_title}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="manual-year">Year</Label>
+            <Input
+              id="manual-year"
+              type="number"
+              min={2000}
+              max={2100}
+              value={year}
+              onChange={(event) => setYear(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="manual-month">Month</Label>
+            <Input
+              id="manual-month"
+              type="number"
+              min={1}
+              max={12}
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="manual-revenue">Revenue</Label>
+            <Input
+              id="manual-revenue"
+              type="number"
+              min={0}
+              value={revenue}
+              onChange={(event) => setRevenue(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="manual-cost">Cost</Label>
+            <Input
+              id="manual-cost"
+              type="number"
+              min={0}
+              value={cost}
+              onChange={(event) => setCost(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5 lg:col-span-2">
+            <Label htmlFor="manual-notes">Note</Label>
+            <Input
+              id="manual-notes"
+              value={notes}
+              placeholder="Why this was entered by hand"
+              onChange={(event) => setNotes(event.target.value)}
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Gross profit {formatMoney(profit, 'QAR')} · margin{' '}
+          {margin === null ? '—' : formatPercent(margin)}. A hand-entered month is recorded as
+          confirmed, not projected — somebody typed what actually happened.
+        </p>
+
+        {create.isError ? <ErrorState error={create.error} /> : null}
+
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            disabled={!deploymentId || !revenue || create.isPending}
+            loading={create.isPending}
+            onClick={() =>
+              create.mutate(
+                {
+                  deployment_id: deploymentId,
+                  period_year: Number(year),
+                  period_month: Number(month),
+                  revenue_amount: revenue,
+                  cost_amount: cost || '0',
+                  notes: notes.trim() || undefined,
+                },
+                { onSuccess: onDone },
+              )
+            }
+          >
+            Record month
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onDone}>
+            Cancel
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function BillingWorkbench({
   view = 'records',
 }: {
@@ -266,6 +404,7 @@ export function BillingWorkbench({
 } = {}) {
   const can = useAuthStore((state) => state.can);
   const [status, setStatus] = React.useState<BillingStatus | ''>('');
+  const [manualEntry, setManualEntry] = React.useState(false);
 
   const headline = useBillingHeadline();
   const records = useBillingRecords({ status: status || undefined });
@@ -296,6 +435,11 @@ export function BillingWorkbench({
         description={descriptions[view]}
         actions={
           canWrite ? (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setManualEntry((value) => !value)}>
+                <PlusCircle aria-hidden />
+                Record a month
+              </Button>
             <Button
               variant="outline"
               onClick={() => generate.mutate(undefined)}
@@ -308,9 +452,14 @@ export function BillingWorkbench({
               )}
               Generate projections
             </Button>
+            </div>
           ) : undefined
         }
       />
+
+      {manualEntry && canWrite ? (
+        <ManualEntryForm onDone={() => setManualEntry(false)} />
+      ) : null}
 
       {headline.isError ? (
         <ErrorState error={headline.error} onRetry={() => void headline.refetch()} />

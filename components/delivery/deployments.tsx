@@ -1,7 +1,8 @@
 'use client';
 
-import { CalendarClock, Link2, Repeat, Square } from 'lucide-react';
+import { CalendarClock, Link2, Repeat, Square, X } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
@@ -269,10 +270,20 @@ function DeploymentRow({ deployment, canWrite }: { deployment: Deployment; canWr
 
 export function Deployments({ endingSoon = false }: { endingSoon?: boolean } = {}) {
   const can = useAuthStore((state) => state.can);
-  const [status, setStatus] = React.useState<DeploymentStatus | ''>(endingSoon ? '' : 'ACTIVE');
+  const searchParams = useSearchParams();
+  const linkedResource = endingSoon ? null : searchParams.get('resource');
+  const [status, setStatus] = React.useState<DeploymentStatus | ''>(
+    // Arriving from a submission, the deployment being looked for may already
+    // have ended. Defaulting to ACTIVE would show an empty list and imply the
+    // handover never happened.
+    endingSoon || searchParams.get('resource') ? '' : 'ACTIVE',
+  );
   const [daysAhead, setDaysAhead] = React.useState(90);
 
-  const all = useDeployments({ status: endingSoon ? '' : status });
+  const all = useDeployments({
+    status: endingSoon ? '' : status,
+    resource_id: linkedResource ?? '',
+  });
   const ending = useEndingSoon(daysAhead);
 
   if (!can('deployment:read')) return <PermissionDeniedState />;
@@ -330,6 +341,21 @@ export function Deployments({ endingSoon = false }: { endingSoon?: boolean } = {
               </Select>
             </label>
           )}
+
+          {linkedResource ? (
+            <div className="flex items-center gap-2 text-sm">
+              <Badge variant="muted">
+                Showing one consultant
+                {rows[0]?.resource_name ? `: ${rows[0].resource_name}` : ''}
+              </Badge>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/deployments/active">
+                  <X aria-hidden />
+                  Show everyone
+                </Link>
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

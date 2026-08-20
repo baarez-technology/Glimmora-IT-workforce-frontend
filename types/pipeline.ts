@@ -112,6 +112,13 @@ export interface Submission {
   client_feedback: string | null;
   rejection_reason: string | null;
   interview_count: number;
+  /**
+   * Set once this submission has been deployed.
+   *
+   * A submission stays SELECTED forever after the handover, so status alone
+   * cannot tell us whether deploying is still possible.
+   */
+  deployment_id: string | null;
   created_at: string;
 }
 

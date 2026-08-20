@@ -1,8 +1,21 @@
 'use client';
 
-import { Deployments } from '@/components/delivery/deployments';
+import * as React from 'react';
 
-/** Phase 11 — consultants currently deployed and billing. */
+import { Deployments } from '@/components/delivery/deployments';
+import { TableLoadingState } from '@/components/states';
+
+/**
+ * Phase 11 - consultants currently deployed and billing.
+ *
+ * Suspense because the list reads ?resource= to focus a single consultant when
+ * arrived at from a submission, and useSearchParams needs a boundary to
+ * prerender.
+ */
 export default function ActiveDeploymentsPage() {
-  return <Deployments />;
+  return (
+    <React.Suspense fallback={<TableLoadingState rows={5} columns={6} />}>
+      <Deployments />
+    </React.Suspense>
+  );
 }

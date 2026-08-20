@@ -1,8 +1,15 @@
 'use client';
 
-import { Deployments } from '@/components/delivery/deployments';
+import * as React from 'react';
 
-/** Phase 11 — the 90/60/30/15/7-day horizons. */
+import { Deployments } from '@/components/delivery/deployments';
+import { TableLoadingState } from '@/components/states';
+
+/** Phase 11 - the 90/60/30/15/7-day horizons. */
 export default function EndingSoonPage() {
-  return <Deployments endingSoon />;
+  return (
+    <React.Suspense fallback={<TableLoadingState rows={5} columns={6} />}>
+      <Deployments endingSoon />
+    </React.Suspense>
+  );
 }

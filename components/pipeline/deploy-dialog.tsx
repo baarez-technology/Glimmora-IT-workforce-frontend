@@ -3,11 +3,12 @@
 import { Briefcase } from 'lucide-react';
 import * as React from 'react';
 
-import { ErrorState } from '@/components/states';
+import { ErrorState, InlineWarning } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateDeployment } from '@/hooks/use-delivery';
+import { ApiError } from '@/lib/api';
 import type { Submission } from '@/types/pipeline';
 
 /**
@@ -35,6 +36,13 @@ export function DeployForm({
   const deploy = useCreateDeployment();
 
   const invalidRange = Boolean(end) && end < start;
+
+  // A 409 here is not a loading failure, and retrying cannot fix it: somebody
+  // deployed this submission already, most likely in another tab or by a
+  // colleague. Say that, and offer the way forward rather than a Retry that is
+  // guaranteed to fail again.
+  const conflict =
+    deploy.error instanceof ApiError && deploy.error.status === 409 ? deploy.error : null;
 
   return (
     <div className="space-y-3 rounded-md border bg-background p-3">
@@ -85,7 +93,20 @@ export function DeployForm({
       {invalidRange ? (
         <p className="text-xs text-destructive">The end date cannot be before the start.</p>
       ) : null}
-      {deploy.isError ? <ErrorState error={deploy.error} /> : null}
+      {conflict ? (
+        <InlineWarning>
+          <p className="font-medium">{conflict.message}</p>
+          <p className="mt-0.5 text-muted-foreground">
+            Somebody placed this consultant while this form was open. Close it and reload the
+            list — the row will offer &ldquo;View deployment&rdquo; instead.
+          </p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={onDone}>
+            Close
+          </Button>
+        </InlineWarning>
+      ) : deploy.isError ? (
+        <ErrorState error={deploy.error} title="The deployment was not created" />
+      ) : null}
 
       <div className="flex gap-2">
         <Button

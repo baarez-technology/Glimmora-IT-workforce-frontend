@@ -74,11 +74,23 @@ export function useEndingSoon(daysAhead = 90) {
   });
 }
 
+/**
+ * The handover from pipeline to delivery.
+ *
+ * Invalidates the pipeline as well as delivery: a deployed submission now
+ * carries a `deployment_id`, and the submissions table keys its Deploy button
+ * off that. Without this the button lingers on a consultant who is already
+ * placed, and pressing it returns 409.
+ */
 export function useCreateDeployment() {
   const invalidate = useInvalidate();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: Record<string, unknown>) => api.post<Deployment>('/deployments', input),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+    },
   });
 }
 

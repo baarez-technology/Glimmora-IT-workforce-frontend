@@ -274,7 +274,12 @@ function SubmissionRow({
   const history = useSubmissionHistory(showHistory ? submission.id : undefined);
 
   // The pipeline hands over to delivery here, and only here.
-  const deployable = canDeploy && submission.status === 'SELECTED';
+  //
+  // A submission stays SELECTED after it is deployed, so status alone would
+  // keep offering Deploy on a consultant who is already placed — a button that
+  // can only ever return 409. `deployment_id` is what actually decides it.
+  const deployed = submission.deployment_id !== null;
+  const deployable = canDeploy && submission.status === 'SELECTED' && !deployed;
 
   return (
     <>
@@ -320,6 +325,13 @@ function SubmissionRow({
               <Button size="sm" onClick={() => setDeploying((value) => !value)}>
                 <Briefcase aria-hidden />
                 Deploy
+              </Button>
+            ) : deployed ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/deployments/active?resource=${submission.resource_id}`}>
+                  <Briefcase aria-hidden />
+                  View deployment
+                </Link>
               </Button>
             ) : null}
             {canWrite ? (

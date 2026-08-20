@@ -92,6 +92,7 @@ function makeSubmission(overrides: Partial<Submission> = {}): Submission {
     client_feedback: null,
     rejection_reason: null,
     interview_count: 0,
+    deployment_id: null,
     created_at: '2026-08-10T09:00:00Z',
     ...overrides,
   };
@@ -467,6 +468,30 @@ describe('handover to delivery', () => {
 
     await waitFor(() => expect(screen.getByText('Not selected yet')).toBeInTheDocument());
     expect(screen.getAllByRole('button', { name: /^Deploy$/ })).toHaveLength(1);
+  });
+
+  it('withdraws Deploy once the submission has been deployed', async () => {
+    // A submission stays SELECTED after the handover. Keying the button off
+    // status alone offered Deploy forever on somebody already placed, and the
+    // press could only ever return 409.
+    vi.stubGlobal(
+      'fetch',
+      mockApi({
+        submissions: [
+          makeSubmission({ id: 'a', status: 'SELECTED', deployment_id: 'dep-1' }),
+          makeSubmission({ id: 'b', status: 'SELECTED', resource_name: 'Not yet placed' }),
+        ],
+      }),
+    );
+    render(<Submissions />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Not yet placed')).toBeInTheDocument());
+
+    expect(screen.getAllByRole('button', { name: /^Deploy$/ })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /View deployment/i })).toHaveAttribute(
+      'href',
+      '/deployments/active?resource=res-1',
+    );
   });
 
   it('explains that the rates are copied onto the deployment', async () => {

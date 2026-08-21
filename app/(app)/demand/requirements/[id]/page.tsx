@@ -1,11 +1,13 @@
 'use client';
 
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft, GitBranch, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { ParseReview } from '@/components/demand/parse-review';
+import { RequirementStatusForm } from '@/components/demand/status-form';
+import { RequirementScore } from '@/components/scoring/opportunity-board';
 import { PageHeader } from '@/components/layout/page-header';
 import {
   CardLoadingState,
@@ -14,6 +16,7 @@ import {
   PermissionDeniedState,
 } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRequirement, useRequirementHistory } from '@/hooks/use-requirements';
@@ -38,6 +41,7 @@ export default function RequirementDetailPage() {
 
   const requirement = useRequirement(requirementId);
   const history = useRequirementHistory(requirementId);
+  const [statusOpen, setStatusOpen] = React.useState(false);
 
   if (!can('requirement:read')) return <PermissionDeniedState />;
 
@@ -90,7 +94,21 @@ export default function RequirementDetailPage() {
             {[data.role, data.account_name, data.location].filter(Boolean).join(' · ')}
           </span>
         }
+        actions={
+          can('requirement:update') ? (
+            <Button variant="outline" onClick={() => setStatusOpen((value) => !value)}>
+              <GitBranch aria-hidden />
+              Change status
+            </Button>
+          ) : undefined
+        }
       />
+
+      {statusOpen && can('requirement:update') ? (
+        <div className="mb-4">
+          <RequirementStatusForm requirement={data} onDone={() => setStatusOpen(false)} />
+        </div>
+      ) : null}
 
       {data.needs_review && defaultTab !== 'review' && (
         <div className="mb-4">
@@ -110,6 +128,7 @@ export default function RequirementDetailPage() {
               Review extraction
             </TabsTrigger>
           )}
+          {can('scoring:read') ? <TabsTrigger value="score">Score</TabsTrigger> : null}
           <TabsTrigger value="source">Source</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
@@ -215,6 +234,12 @@ export default function RequirementDetailPage() {
             <ParseReview requirementId={requirementId} />
           </TabsContent>
         )}
+
+        {can('scoring:read') && requirementId ? (
+          <TabsContent value="score">
+            <RequirementScore requirementId={requirementId} />
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="source">
           <Card>

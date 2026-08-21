@@ -52,6 +52,43 @@ export const REQUIREMENT_STATUS_VARIANT: Record<
   EXPIRED: 'destructive',
 };
 
+export const REQUIREMENT_STATUS_LABELS: Record<RequirementStatus, string> = {
+  NEW: 'New',
+  PARSED: 'Parsed',
+  UNDER_REVIEW: 'Under review',
+  QUALIFIED: 'Qualified',
+  ON_HOLD: 'On hold',
+  CLOSED_WON: 'Closed — won',
+  CLOSED_LOST: 'Closed — lost',
+  EXPIRED: 'Expired',
+};
+
+/**
+ * Which status moves the API will accept, mirrored from ALLOWED_TRANSITIONS in
+ * the requirements service.
+ *
+ * Offering a move the server rejects is a button that only ever returns 409, so
+ * the dropdown lists exactly what is legal from where the requirement stands.
+ * CLOSED_WON is deliberately terminal: a won requirement is history.
+ */
+export const REQUIREMENT_TRANSITIONS: Record<RequirementStatus, RequirementStatus[]> = {
+  NEW: ['PARSED', 'UNDER_REVIEW', 'QUALIFIED', 'ON_HOLD', 'CLOSED_LOST', 'EXPIRED'],
+  PARSED: ['UNDER_REVIEW', 'QUALIFIED', 'ON_HOLD', 'CLOSED_LOST', 'EXPIRED'],
+  UNDER_REVIEW: ['QUALIFIED', 'ON_HOLD', 'CLOSED_LOST', 'EXPIRED'],
+  QUALIFIED: ['ON_HOLD', 'CLOSED_WON', 'CLOSED_LOST', 'EXPIRED'],
+  ON_HOLD: ['QUALIFIED', 'UNDER_REVIEW', 'CLOSED_LOST', 'EXPIRED'],
+  CLOSED_WON: [],
+  CLOSED_LOST: ['QUALIFIED'],
+  EXPIRED: ['QUALIFIED', 'CLOSED_LOST'],
+};
+
+/** Closing or shelving a requirement should say why. */
+export const REQUIREMENT_STATUSES_NEEDING_REASON: RequirementStatus[] = [
+  'ON_HOLD',
+  'CLOSED_LOST',
+  'EXPIRED',
+];
+
 export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
   CONTRACT: 'Contract',
   CONTRACT_TO_HIRE: 'Contract to hire',

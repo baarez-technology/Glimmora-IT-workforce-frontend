@@ -287,6 +287,7 @@ function ImportWizard() {
                   </Button>
                   <Button
                     variant="ghost"
+                    disabled={discard.isPending}
                     onClick={() => discard.mutate(batch.id, { onSuccess: reset })}
                   >
                     Discard

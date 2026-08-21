@@ -1,10 +1,12 @@
 'use client';
 
-import { ShieldAlert, TriangleAlert } from 'lucide-react';
+import { FileUp, ShieldAlert, TriangleAlert, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
+import { CVUploadDialog } from '@/components/talent/cv-upload-dialog';
+import { ResourceFormDialog } from '@/components/talent/resource-form-dialog';
 import {
   EmptyState,
   ErrorState,
@@ -63,7 +65,13 @@ export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) 
 
   const resources = useResources(query);
 
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [cvOpen, setCvOpen] = React.useState(false);
+
   if (!can('resource:read')) return <PermissionDeniedState />;
+
+  const canCreate = can('resource:create');
+  const canParseCV = can('cv:parse');
 
   const isFiltered = Boolean(query.q || query.resource_type || query.availability_status);
   const blocked = resources.data?.items.filter((item) => item.blocks_deployment).length ?? 0;
@@ -76,6 +84,24 @@ export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) 
           benchOnly
             ? 'Unbilled capacity. This is the number the redeployment engine exists to drive to zero.'
             : 'Every consultant, employee, freelancer and pre-vetted candidate Glimmora can put forward.'
+        }
+        actions={
+          canCreate || canParseCV ? (
+            <div className="flex flex-wrap gap-2">
+              {canParseCV ? (
+                <Button variant="outline" onClick={() => setCvOpen(true)}>
+                  <FileUp aria-hidden />
+                  Upload a CV
+                </Button>
+              ) : null}
+              {canCreate ? (
+                <Button onClick={() => setAddOpen(true)}>
+                  <UserPlus aria-hidden />
+                  Add consultant
+                </Button>
+              ) : null}
+            </div>
+          ) : null
         }
       />
 
@@ -157,11 +183,21 @@ export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) 
               />
             ) : (
               <EmptyState
-                title={benchOnly ? 'Nobody on the bench' : 'No resources yet'}
+                title={benchOnly ? 'Nobody on the bench' : 'No consultants yet'}
                 description={
                   benchOnly
                     ? 'Every consultant is currently deployed or unavailable. That is the goal.'
-                    : 'Upload a CV and the platform will extract a candidate profile for you to review.'
+                    : canParseCV
+                      ? 'Upload a CV and the platform will extract a profile for you to review, or enter one by hand.'
+                      : 'Nobody with your role can add consultants. Ask Resourcing to build the talent cloud.'
+                }
+                action={
+                  !benchOnly && canParseCV ? (
+                    <Button onClick={() => setCvOpen(true)}>
+                      <FileUp aria-hidden />
+                      Upload a CV
+                    </Button>
+                  ) : undefined
                 }
               />
             )
@@ -306,6 +342,9 @@ export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) 
           )}
         </CardContent>
       </Card>
+
+      <ResourceFormDialog open={addOpen} onOpenChange={setAddOpen} />
+      <CVUploadDialog open={cvOpen} onOpenChange={setCvOpen} />
     </>
   );
 }

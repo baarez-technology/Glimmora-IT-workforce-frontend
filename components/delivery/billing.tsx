@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Info, PlusCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Info, Pencil, PlusCircle, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
@@ -32,6 +32,7 @@ import {
   useBillingRecords,
   useBillingSummary,
   useConfirmBilling,
+  useUpdateBillingRecord,
   useGenerateProjections,
 } from '@/hooks/use-delivery';
 import { useAuthStore } from '@/lib/auth-store';
@@ -133,8 +134,98 @@ function ConfirmForm({ record, onDone }: { record: BillingRecord; onDone: () => 
   );
 }
 
+/**
+ * Correct a month that has already been confirmed.
+ *
+ * A confirmed figure is what somebody said actually happened, so this is not a
+ * second confirmation — it is an amendment, and it asks for the reason. Profit
+ * and margin are always re-derived server-side, never taken from here.
+ */
+function CorrectForm({ record, onDone }: { record: BillingRecord; onDone: () => void }) {
+  const [revenue, setRevenue] = React.useState(record.revenue_amount);
+  const [cost, setCost] = React.useState(record.cost_amount);
+  const [notes, setNotes] = React.useState(record.notes ?? '');
+  const update = useUpdateBillingRecord(record.id);
+
+  const changed = revenue !== record.revenue_amount || cost !== record.cost_amount;
+  const profit = Number(revenue) - Number(cost);
+  const margin = Number(revenue) > 0 ? (profit / Number(revenue)) * 100 : null;
+
+  return (
+    <div className="space-y-3 rounded-md border bg-background p-3">
+      <p className="text-sm font-medium">Correct {record.period_label}</p>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`fix-rev-${record.id}`}>Revenue</Label>
+          <Input
+            id={`fix-rev-${record.id}`}
+            type="number"
+            min={0}
+            value={revenue}
+            onChange={(event) => setRevenue(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`fix-cost-${record.id}`}>Cost</Label>
+          <Input
+            id={`fix-cost-${record.id}`}
+            type="number"
+            min={0}
+            value={cost}
+            onChange={(event) => setCost(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`fix-note-${record.id}`}>Reason for the correction</Label>
+          <Input
+            id={`fix-note-${record.id}`}
+            value={notes}
+            placeholder="What was wrong"
+            onChange={(event) => setNotes(event.target.value)}
+            aria-invalid={changed && !notes.trim()}
+          />
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Gross profit {formatMoney(profit, record.currency)} · margin{' '}
+        {margin === null ? '—' : formatPercent(margin)}. This month has already been confirmed, so
+        a change here amends the reported figure — say why.
+      </p>
+
+      {update.isError ? <ErrorState error={update.error} title="The correction was not saved" /> : null}
+
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          loading={update.isPending}
+          disabled={!changed || !notes.trim()}
+          onClick={() =>
+            update.mutate(
+              {
+                revenue_amount: revenue,
+                cost_amount: cost,
+                notes: notes.trim(),
+              },
+              { onSuccess: onDone },
+            )
+          }
+        >
+          <Pencil aria-hidden />
+          Save correction
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function RecordRow({ record, canWrite }: { record: BillingRecord; canWrite: boolean }) {
   const [confirming, setConfirming] = React.useState(false);
+  const [correcting, setCorrecting] = React.useState(false);
 
   return (
     <>
@@ -174,14 +265,28 @@ function RecordRow({ record, canWrite }: { record: BillingRecord; canWrite: bool
             >
               Confirm
             </Button>
+          ) : canWrite && record.status === 'CONFIRMED' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCorrecting((value) => !value)}
+              aria-label={`Correct ${record.period_label}`}
+            >
+              <Pencil aria-hidden />
+              Correct
+            </Button>
           ) : null}
         </TableCell>
       </TableRow>
 
-      {confirming ? (
+      {confirming || correcting ? (
         <TableRow>
           <TableCell colSpan={7} className="bg-muted/20">
-            <ConfirmForm record={record} onDone={() => setConfirming(false)} />
+            {confirming ? (
+              <ConfirmForm record={record} onDone={() => setConfirming(false)} />
+            ) : (
+              <CorrectForm record={record} onDone={() => setCorrecting(false)} />
+            )}
           </TableCell>
         </TableRow>
       ) : null}

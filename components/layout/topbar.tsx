@@ -1,16 +1,58 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Bell, ChevronRight, Menu, Search } from 'lucide-react';
+import { Bell, ChevronRight, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { UserMenu } from '@/components/layout/user-menu';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useUnreadCount } from '@/hooks/use-platform';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
 import { findNavItem, findNavSection } from '@/lib/navigation';
 import type { HealthResponse } from '@/types/api';
+
+/**
+ * The notification bell.
+ *
+ * Carries the unread count, because a bell that never changes is furniture: a
+ * critical work-permit expiry has to be visible from whatever screen somebody
+ * happens to be on, not only from the notifications page itself.
+ */
+function NotificationBell() {
+  const can = useAuthStore((state) => state.can);
+  const allowed = can('notification:read');
+  const counts = useUnreadCount({ enabled: allowed });
+
+  if (!allowed) return null;
+
+  const total = counts.data?.total ?? 0;
+  const critical = counts.data?.critical ?? 0;
+  const label =
+    total === 0
+      ? 'Notifications, none unread'
+      : `Notifications, ${total} unread${critical > 0 ? `, ${critical} critical` : ''}`;
+
+  return (
+    <Button variant="ghost" size="icon" className="relative" asChild>
+      <Link href="/notifications" aria-label={label} title={label}>
+        <Bell aria-hidden />
+        {total > 0 ? (
+          <span
+            aria-hidden
+            className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none text-white ${
+              critical > 0 ? 'bg-destructive' : 'bg-primary'
+            }`}
+          >
+            {total > 99 ? '99+' : total}
+          </span>
+        ) : null}
+      </Link>
+    </Button>
+  );
+}
 
 function Breadcrumbs() {
   const pathname = usePathname();
@@ -99,15 +141,7 @@ export function Topbar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <div className="flex items-center gap-2">
         <HealthIndicator />
 
-        <Button variant="ghost" size="icon" disabled title="Search arrives with the talent cloud in Phase 6">
-          <Search aria-hidden />
-          <span className="sr-only">Search</span>
-        </Button>
-
-        <Button variant="ghost" size="icon" disabled title="Notifications arrive in Phase 12">
-          <Bell aria-hidden />
-          <span className="sr-only">Notifications</span>
-        </Button>
+        <NotificationBell />
 
         <div className="mx-1 h-6 w-px bg-border" aria-hidden />
 

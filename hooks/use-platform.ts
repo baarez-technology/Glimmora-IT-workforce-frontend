@@ -48,11 +48,12 @@ export function useNotifications(
  * latency on an alert costs nothing, and a websocket for this would be
  * infrastructure with no matching benefit.
  */
-export function useUnreadCount() {
+export function useUnreadCount({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: platformKeys.unread(),
     queryFn: () => api.get<UnreadCount>('/notifications/unread-count'),
     refetchInterval: 60_000,
+    enabled,
   });
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Plus, Star, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as React from 'react';
@@ -12,6 +12,8 @@ import { AddressabilityCard } from '@/components/accounts/addressability-card';
 import { CreateContactDialog } from '@/components/accounts/create-contact-dialog';
 import { CreateProjectDialog } from '@/components/accounts/create-project-dialog';
 import { LogActivityDialog } from '@/components/accounts/log-activity-dialog';
+import { EditAccountDialog } from '@/components/accounts/edit-account-dialog';
+import { EditContactDialog } from '@/components/accounts/edit-contact-dialog';
 import { PageHeader } from '@/components/layout/page-header';
 import {
   CardLoadingState,
@@ -40,6 +42,7 @@ import {
 import { ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatDate, humanizeEnum } from '@/lib/format';
+import type { Contact } from '@/types/accounts';
 
 export default function AccountDetailPage() {
   const params = useParams<{ id: string }>();
@@ -48,6 +51,8 @@ export default function AccountDetailPage() {
 
   const [logOpen, setLogOpen] = React.useState(false);
   const [contactOpen, setContactOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editingContact, setEditingContact] = React.useState<Contact | null>(null);
   const [projectOpen, setProjectOpen] = React.useState(false);
   const [routeOpen, setRouteOpen] = React.useState(false);
 
@@ -112,12 +117,20 @@ export default function AccountDetailPage() {
           </span>
         }
         actions={
-          can('activity:write') ? (
-            <Button onClick={() => setLogOpen(true)}>
-              <Plus aria-hidden />
-              Log activity
-            </Button>
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            {can('account:update') ? (
+              <Button variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil aria-hidden />
+                Edit account
+              </Button>
+            ) : null}
+            {can('activity:write') ? (
+              <Button onClick={() => setLogOpen(true)}>
+                <Plus aria-hidden />
+                Log activity
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
@@ -250,6 +263,7 @@ export default function AccountDetailPage() {
                                 <Badge variant="success">Decision maker</Badge>
                               )}
                               {contact.is_primary && <Badge variant="info">Primary</Badge>}
+                              {!contact.is_active && <Badge variant="muted">Left</Badge>}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {[contact.title, contact.email, contact.phone]
@@ -257,6 +271,16 @@ export default function AccountDetailPage() {
                                 .join(' · ') || '—'}
                             </div>
                           </div>
+                          {can('contact:write') ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingContact(contact)}
+                              aria-label={`Edit ${contact.full_name}`}
+                            >
+                              <Pencil aria-hidden />
+                            </Button>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
@@ -357,6 +381,17 @@ export default function AccountDetailPage() {
           <AddRouteDialog open={routeOpen} onOpenChange={setRouteOpen} accountId={accountId} />
         </>
       )}
+
+      <EditAccountDialog open={editOpen} onOpenChange={setEditOpen} account={data} />
+      {editingContact ? (
+        <EditContactDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditingContact(null);
+          }}
+          contact={editingContact}
+        />
+      ) : null}
     </>
   );
 }

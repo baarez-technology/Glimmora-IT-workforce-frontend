@@ -1,10 +1,15 @@
 'use client';
 
-import { ArrowLeft, Download, Lock, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Download, FilePlus, Lock, Pencil, ShieldAlert, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import * as React from 'react';
+import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/layout/page-header';
+import { CVReviewDialog } from '@/components/talent/cv-upload-dialog';
+import { DocumentUploadDialog } from '@/components/talent/document-upload-dialog';
+import { ResourceFormDialog } from '@/components/talent/resource-form-dialog';
 import {
   CardLoadingState,
   EmptyState,
@@ -16,7 +21,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { documentDownloadUrl, useResource, useResourceDocuments } from '@/hooks/use-talent';
+import {
+  documentDownloadUrl,
+  useDeleteDocument,
+  useResource,
+  useResourceDocuments,
+} from '@/hooks/use-talent';
+import { ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatDate, humanizeEnum } from '@/lib/format';
 import {
@@ -38,7 +49,14 @@ export default function ResourceDetailPage() {
   const resource = useResource(resourceId);
   const documents = useResourceDocuments(can('document:read') ? resourceId : undefined);
 
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [reviewOpen, setReviewOpen] = React.useState(false);
+  const [uploadOpen, setUploadOpen] = React.useState(false);
+
   if (!can('resource:read')) return <PermissionDeniedState />;
+
+  const canEdit = can('resource:update');
+  const canWriteDocuments = can('document:write');
 
   if (resource.isLoading) {
     return (
@@ -85,6 +103,14 @@ export default function ResourceDetailPage() {
             {[data.headline, data.current_location_city, data.code].filter(Boolean).join(' · ')}
           </span>
         }
+        actions={
+          canEdit ? (
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil aria-hidden />
+              Edit profile
+            </Button>
+          ) : null
+        }
       />
 
       {data.blocks_deployment && (
@@ -100,8 +126,15 @@ export default function ResourceDetailPage() {
       {data.needs_review && (
         <div className="mb-4">
           <InlineWarning>
-            This profile came from a parsed CV and has not been reviewed. It is excluded from
-            matching until the extracted fields are accepted.
+            <p>
+              This profile came from a parsed CV and has not been reviewed. It is excluded from
+              matching until the extracted fields are accepted.
+            </p>
+            {canEdit ? (
+              <Button size="sm" className="mt-2" onClick={() => setReviewOpen(true)}>
+                Review extracted fields
+              </Button>
+            ) : null}
           </InlineWarning>
         </div>
       )}
@@ -273,6 +306,21 @@ export default function ResourceDetailPage() {
 
         <TabsContent value="documents">
           <Card>
+            {canWriteDocuments && can('document:read') ? (
+              <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+                <div>
+                  <CardTitle>Documents</CardTitle>
+                  <CardDescription>
+                    Passports, visas, QIDs and work permits, with the expiry dates the alerts are
+                    built on.
+                  </CardDescription>
+                </div>
+                <Button size="sm" onClick={() => setUploadOpen(true)}>
+                  <FilePlus aria-hidden />
+                  Upload
+                </Button>
+              </CardHeader>
+            ) : null}
             <CardContent className="pt-5">
               {!can('document:read') ? (
                 <PermissionDeniedState description="Documents hold personal data restricted to Resourcing, Management and Admin." />
@@ -295,33 +343,122 @@ export default function ResourceDetailPage() {
                           {document.reference_number ? ` · ${document.reference_number}` : ''}
                         </div>
                       </div>
-                      {document.can_download ? (
-                        <Button variant="ghost" size="sm" asChild>
-                          <a href={documentDownloadUrl(document.id)}>
-                            <Download aria-hidden />
-                            Download
-                          </a>
-                        </Button>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Lock className="h-3 w-3" aria-hidden />
-                          Restricted
-                        </span>
-                      )}
+                      <div className="flex shrink-0 items-center gap-1">
+                        {document.can_download ? (
+                          <Button variant="ghost" size="sm" asChild>
+                            <a href={documentDownloadUrl(document.id)}>
+                              <Download aria-hidden />
+                              Download
+                            </a>
+                          </Button>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 text-xs text-muted-foreground"
+                            title="Your role can see that this document exists, but not download it"
+                          >
+                            <Lock className="h-3 w-3" aria-hidden />
+                            Restricted
+                          </span>
+                        )}
+                        {canWriteDocuments ? (
+                          <DeleteDocumentButton
+                            documentId={document.id}
+                            label={document.doc_type_label}
+                          />
+                        ) : null}
+                      </div>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <EmptyState
                   title="No documents on file"
-                  description="Upload a visa, QID or work permit with its expiry date so the platform can warn before it lapses."
+                  description={
+                    canWriteDocuments
+                      ? 'Upload a visa, QID or work permit with its expiry date so the platform can warn before it lapses.'
+                      : 'Nothing has been uploaded for this consultant. Resourcing maintains the document vault.'
+                  }
+                  action={
+                    canWriteDocuments ? (
+                      <Button onClick={() => setUploadOpen(true)}>
+                        <FilePlus aria-hidden />
+                        Upload a document
+                      </Button>
+                    ) : undefined
+                  }
                 />
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <ResourceFormDialog open={editOpen} onOpenChange={setEditOpen} resource={data} />
+      {resourceId ? (
+        <>
+          <CVReviewDialog
+            open={reviewOpen}
+            onOpenChange={setReviewOpen}
+            resourceId={resourceId}
+          />
+          <DocumentUploadDialog
+            open={uploadOpen}
+            onOpenChange={setUploadOpen}
+            resourceId={resourceId}
+            resourceName={data.full_name}
+          />
+        </>
+      ) : null}
     </>
+  );
+}
+
+/**
+ * Deleting a document is a two-press action.
+ *
+ * A passport removed by a misclick is a real loss — the file is gone from the
+ * store, and the expiry it carried stops being tracked.
+ */
+function DeleteDocumentButton({ documentId, label }: { documentId: string; label: string }) {
+  const remove = useDeleteDocument();
+  const [confirming, setConfirming] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!confirming) return;
+    const timer = setTimeout(() => setConfirming(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirming]);
+
+  if (!confirming) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setConfirming(true)}
+        aria-label={`Delete ${label}`}
+      >
+        <Trash2 aria-hidden />
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      variant="destructive"
+      size="sm"
+      loading={remove.isPending}
+      onClick={() =>
+        remove.mutate(documentId, {
+          onSuccess: () => toast.success(`${label} deleted.`),
+          onError: (error) =>
+            toast.error(
+              error instanceof ApiError ? error.message : 'The document could not be deleted.',
+            ),
+        })
+      }
+    >
+      Confirm delete
+    </Button>
   );
 }
 

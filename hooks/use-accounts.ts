@@ -107,6 +107,21 @@ export function useUpdateAccount(id: string) {
 
 /* ------------------------------------------------------------------ routes */
 
+/**
+ * Archive an account.
+ *
+ * The API soft-deletes: history, activities and past deployments stay intact,
+ * because a client you stopped working with is still the reason last year's
+ * revenue exists.
+ */
+export function useArchiveAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/accounts/${id}`),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: accountKeys.all }),
+  });
+}
+
 export function useAccountRoutes(id: string | undefined) {
   return useQuery({
     queryKey: accountKeys.routes(id ?? ''),
@@ -171,6 +186,17 @@ export function useUpdateContact() {
 
 /* ---------------------------------------------------------------- projects */
 
+export function useDeleteContact() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/contacts/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      void queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    },
+  });
+}
+
 export function useProjects(query: ProjectQuery) {
   return useQuery({
     queryKey: accountKeys.projects(query),
@@ -183,6 +209,28 @@ export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: Record<string, unknown>) => api.post<Project>('/projects', input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      void queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    },
+  });
+}
+
+export function useUpdateProject(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) => api.patch<Project>(`/projects/${id}`, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      void queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    },
+  });
+}
+
+export function useArchiveProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/projects/${id}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
       void queryClient.invalidateQueries({ queryKey: accountKeys.all });
@@ -230,6 +278,35 @@ export function useLogActivity() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: Record<string, unknown>) => api.post<Activity>('/activities', input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activities'] });
+      void queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    },
+  });
+}
+
+/**
+ * Correct a logged activity.
+ *
+ * A call logged against the wrong date distorts the account timeline, which is
+ * the evidence somebody uses to decide whether this client has gone quiet.
+ */
+export function useUpdateActivity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string } & Record<string, unknown>) =>
+      api.patch<Activity>(`/activities/${id}`, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['activities'] });
+      void queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    },
+  });
+}
+
+export function useDeleteActivity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/activities/${id}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['activities'] });
       void queryClient.invalidateQueries({ queryKey: accountKeys.all });

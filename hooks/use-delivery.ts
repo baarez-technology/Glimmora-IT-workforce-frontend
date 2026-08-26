@@ -94,6 +94,26 @@ export function useCreateDeployment() {
   });
 }
 
+/**
+ * Correct a deployment in place.
+ *
+ * Distinct from extending it: an extension is a new commercial fact with its
+ * own dates, this is fixing a role title or a rate that was typed wrong. The
+ * billing already generated is re-derived server-side.
+ */
+export function useUpdateDeployment(deploymentId: string) {
+  const invalidate = useInvalidate();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Record<string, unknown>) =>
+      api.patch<Deployment>(`/deployments/${deploymentId}`, input),
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ['pipeline'] });
+    },
+  });
+}
+
 export function useEndDeployment(deploymentId: string) {
   const invalidate = useInvalidate();
   return useMutation({

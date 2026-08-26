@@ -2,7 +2,7 @@
 
 import { TalentDirectory } from '@/components/talent/talent-directory';
 
-/** Ready now or ready soon. */
+/** Ready now or ready soon — notice periods included. Not the bench. */
 export default function AvailablePage() {
-  return <TalentDirectory benchOnly />;
+  return <TalentDirectory mode="available" />;
 }

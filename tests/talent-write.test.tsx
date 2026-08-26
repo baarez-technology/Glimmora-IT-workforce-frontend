@@ -110,6 +110,37 @@ describe('talent directory actions', () => {
   });
 });
 
+describe('available is not the bench', () => {
+  beforeEach(() => signIn(HR_PERMISSIONS));
+
+  it('asks the API a different question for each list', async () => {
+    // Both pages used to pass benchOnly, so "Available" showed the bench under
+    // a heading promising something else.
+    const fetchMock = mockApi();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<TalentDirectory mode="available" />, { wrapper });
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some((call) => String(call[0]).includes('/resources/available')),
+      ).toBe(true),
+    );
+    expect(screen.getByLabelText('Ready within')).toBeInTheDocument();
+  });
+
+  it('leaves the bench on the plain list with a bench filter', async () => {
+    const fetchMock = mockApi();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<TalentDirectory mode="bench" />, { wrapper });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.some((url) => url.includes('bench_only=true'))).toBe(true);
+    expect(urls.every((url) => !url.includes('/resources/available'))).toBe(true);
+    expect(screen.queryByLabelText('Ready within')).not.toBeInTheDocument();
+  });
+});
+
 describe('consultant form', () => {
   it('shows the cost field to a role that may see cost', async () => {
     signIn(HR_PERMISSIONS);

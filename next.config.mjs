@@ -5,6 +5,18 @@ const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:8000';
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+
+  /**
+   * Where the build output goes.
+   *
+   * `next dev` and `next build` both write to `.next` by default, so running a
+   * verification build while a dev server is up replaces the chunks that server
+   * is still serving — it then fails with "Cannot find module './1234.js'".
+   * Set NEXT_DIST_DIR to build somewhere else and leave the dev server alone:
+   *
+   *     NEXT_DIST_DIR=.next-verify npx next build
+   */
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   eslint: { ignoreDuringBuilds: false },
   typescript: { ignoreBuildErrors: false },
 

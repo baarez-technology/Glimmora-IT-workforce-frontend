@@ -4,8 +4,9 @@ import {
   CalendarClock,
   CheckCircle2,
   FileText,
-  Mail,
   ListTodo,
+  Mail,
+  Pencil,
   Phone,
   Settings2,
   Users,
@@ -13,11 +14,14 @@ import {
 import * as React from 'react';
 import { toast } from 'sonner';
 
+import { EditActivityDialog } from '@/components/accounts/edit-activity-dialog';
+import { ConfirmAction } from '@/components/confirm-action';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useCompleteFollowUp } from '@/hooks/use-accounts';
+import { useCompleteFollowUp, useDeleteActivity } from '@/hooks/use-accounts';
 import { ACTIVITY_TYPE_LABELS } from '@/lib/accounts';
+import { useAuthStore } from '@/lib/auth-store';
 import { ApiError } from '@/lib/api';
 import { formatDateTime, formatRelative } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -49,6 +53,9 @@ export function ActivityTimeline({
   showAccount?: boolean;
 }) {
   const complete = useCompleteFollowUp();
+  const remove = useDeleteActivity();
+  const canWrite = useAuthStore((state) => state.can)('activity:write');
+  const [editing, setEditing] = React.useState<Activity | null>(null);
 
   if (isLoading) return <LoadingState label="Loading timeline…" />;
   if (error) return <ErrorState error={error} onRetry={onRetry} />;
@@ -134,22 +141,55 @@ export function ActivityTimeline({
                 {activity.project_name && <span>on {activity.project_name}</span>}
               </div>
 
-              {activity.is_follow_up_open && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-1.5 h-7 px-2 text-xs"
-                  onClick={() => void onComplete(activity)}
-                  loading={complete.isPending && complete.variables === activity.id}
-                >
-                  <CheckCircle2 aria-hidden />
-                  Mark follow-up complete
-                </Button>
-              )}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                {activity.is_follow_up_open && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => void onComplete(activity)}
+                    loading={complete.isPending && complete.variables === activity.id}
+                  >
+                    <CheckCircle2 aria-hidden />
+                    Mark follow-up complete
+                  </Button>
+                )}
+                {canWrite && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setEditing(activity)}
+                    >
+                      <Pencil aria-hidden />
+                      Edit
+                    </Button>
+                    <ConfirmAction
+                      iconOnly
+                      label={`Delete "${activity.subject}"`}
+                      confirmLabel="Confirm delete"
+                      successMessage="Activity deleted."
+                      errorMessage="The activity could not be deleted."
+                      isPending={remove.isPending}
+                      onConfirm={() => remove.mutateAsync(activity.id)}
+                    />
+                  </>
+                )}
+              </div>
             </div>
           </li>
         );
       })}
+      {editing ? (
+        <EditActivityDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditing(null);
+          }}
+          activity={editing}
+        />
+      ) : null}
     </ol>
   );
 }

@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useResources, type ResourceQuery } from '@/hooks/use-talent';
+import { useAvailableResources, useResources, type ResourceQuery } from '@/hooks/use-talent';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatDate } from '@/lib/format';
 import {
@@ -50,7 +50,21 @@ const EMPTY_QUERY: ResourceQuery = {
   availability_status: '',
 };
 
-export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) {
+/**
+ * One screen, three lists.
+ *
+ * `bench` and `available` are different questions and were previously the same
+ * one: both pages passed benchOnly, so "Available" showed the bench under a
+ * heading promising something else. The bench is unbilled capacity; available
+ * is who can start within a window, which the API works out from notice period
+ * as well as end date.
+ */
+export function TalentDirectory({
+  mode = 'all',
+}: {
+  mode?: 'all' | 'bench' | 'available';
+}) {
+  const benchOnly = mode === 'bench';
   const can = useAuthStore((state) => state.can);
   const [query, setQuery] = React.useState<ResourceQuery>({
     ...EMPTY_QUERY,
@@ -63,7 +77,18 @@ export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) 
     return () => clearTimeout(timer);
   }, [search]);
 
-  const resources = useResources(query);
+  const [withinDays, setWithinDays] = React.useState(30);
+
+  // Only the list on screen is fetched. Both hooks must be called — rules of
+  // hooks — but the one that is not showing stays disabled rather than making
+  // a request nobody reads.
+  const showAvailable = mode === 'available';
+  const listed = useResources(query, { enabled: !showAvailable });
+  const available = useAvailableResources(
+    { ...query, within_days: withinDays },
+    { enabled: showAvailable },
+  );
+  const resources = showAvailable ? available : listed;
 
   const [addOpen, setAddOpen] = React.useState(false);
   const [cvOpen, setCvOpen] = React.useState(false);
@@ -79,11 +104,13 @@ export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) 
   return (
     <>
       <PageHeader
-        title={benchOnly ? 'Bench' : 'Talent Cloud'}
+        title={mode === 'bench' ? 'Bench' : mode === 'available' ? 'Available' : 'Talent Cloud'}
         description={
-          benchOnly
+          mode === 'bench'
             ? 'Unbilled capacity. This is the number the redeployment engine exists to drive to zero.'
-            : 'Every consultant, employee, freelancer and pre-vetted candidate Glimmora can put forward.'
+            : mode === 'available'
+              ? `Who can start within ${withinDays} days, counting notice periods — not the same list as the bench.`
+              : 'Every consultant, employee, freelancer and pre-vetted candidate Glimmora can put forward.'
         }
         actions={
           canCreate || canParseCV ? (
@@ -129,6 +156,20 @@ export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) 
               className="max-w-xs"
               aria-label="Search resources"
             />
+            {mode === 'available' ? (
+              <Select
+                value={String(withinDays)}
+                onChange={(event) => setWithinDays(Number(event.target.value))}
+                aria-label="Ready within"
+                className="w-[11rem]"
+              >
+                <option value="7">Ready in 7 days</option>
+                <option value="14">Ready in 14 days</option>
+                <option value="30">Ready in 30 days</option>
+                <option value="60">Ready in 60 days</option>
+                <option value="90">Ready in 90 days</option>
+              </Select>
+            ) : null}
             <Select
               value={query.resource_type ?? ''}
               onChange={(event) =>
@@ -183,9 +224,17 @@ export function TalentDirectory({ benchOnly = false }: { benchOnly?: boolean }) 
               />
             ) : (
               <EmptyState
-                title={benchOnly ? 'Nobody on the bench' : 'No consultants yet'}
+                title={
+                  mode === 'bench'
+                    ? 'Nobody on the bench'
+                    : mode === 'available'
+                      ? 'Nobody free in this window'
+                      : 'No consultants yet'
+                }
                 description={
-                  benchOnly
+                  mode === 'available'
+                    ? 'Widen the window, or check the bench for people already unbilled.'
+                    : benchOnly
                     ? 'Every consultant is currently deployed or unavailable. That is the goal.'
                     : canParseCV
                       ? 'Upload a CV and the platform will extract a profile for you to review, or enter one by hand.'

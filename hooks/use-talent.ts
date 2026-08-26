@@ -41,11 +41,31 @@ function clean<T extends object>(query: T): Record<string, string | number | boo
   ) as Record<string, string | number | boolean>;
 }
 
-export function useResources(query: ResourceQuery) {
+export function useResources(query: ResourceQuery, { enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: talentKeys.list(query),
     queryFn: () => api.get<Page<Resource>>('/resources', { query: clean(query) }),
     placeholderData: (previous) => previous,
+    enabled,
+  });
+}
+
+/**
+ * Ready now, or ready within `withinDays`.
+ *
+ * Not the same list as the bench, which is why it has its own endpoint: this
+ * one accounts for notice period, so somebody available in three weeks on a
+ * thirty-day notice does not appear as ready in twenty-one days.
+ */
+export function useAvailableResources(
+  query: ResourceQuery & { within_days?: number },
+  { enabled = true }: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: ['resources', 'available', query],
+    queryFn: () => api.get<Page<Resource>>('/resources/available', { query: clean(query) }),
+    placeholderData: (previous) => previous,
+    enabled,
   });
 }
 
@@ -120,6 +140,20 @@ export function useUpdateResource(id: string) {
   });
 }
 
+/**
+ * Archive a consultant.
+ *
+ * Soft-delete, and the API refuses while they are actively deployed — removing
+ * somebody mid-engagement would orphan the billing that depends on them.
+ */
+export function useArchiveResource() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/resources/${id}`),
+    onSuccess: invalidate,
+  });
+}
+
 export function useParseCV() {
   const invalidate = useInvalidate();
   return useMutation({
@@ -168,6 +202,22 @@ export function useUploadDocument(resourceId: string) {
       }
       return api.post<ResourceDocument>(`/resources/${resourceId}/documents`, form);
     },
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Correct a document's details — above all its expiry date.
+ *
+ * A visa recorded with the wrong expiry either raises an alarm that is not real
+ * or, worse, stays silent through one that is. Fixing the date must not require
+ * deleting the file and uploading it again.
+ */
+export function useUpdateDocument() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string } & Record<string, unknown>) =>
+      api.patch<ResourceDocument>(`/documents/${id}`, input),
     onSuccess: invalidate,
   });
 }

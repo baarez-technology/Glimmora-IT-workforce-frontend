@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarClock, Link2, Repeat, Square, X } from 'lucide-react';
+import { CalendarClock, Link2, Pencil, Repeat, Square, X } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import * as React from 'react';
@@ -32,6 +32,7 @@ import {
   useEndDeployment,
   useEndingSoon,
   useExtendDeployment,
+  useUpdateDeployment,
 } from '@/hooks/use-delivery';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -181,7 +182,7 @@ function ExtendForm({ deployment, onDone }: { deployment: Deployment; onDone: ()
 }
 
 function DeploymentRow({ deployment, canWrite }: { deployment: Deployment; canWrite: boolean }) {
-  const [action, setAction] = React.useState<'end' | 'extend' | null>(null);
+  const [action, setAction] = React.useState<'end' | 'extend' | 'correct' | null>(null);
   const live = deployment.status === 'ACTIVE' || deployment.status === 'PENDING_START';
 
   return (
@@ -248,6 +249,14 @@ function DeploymentRow({ deployment, canWrite }: { deployment: Deployment; canWr
                 <Square aria-hidden />
                 End
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAction(action === 'correct' ? null : 'correct')}
+                aria-label="Correct this deployment"
+              >
+                <Pencil aria-hidden />
+              </Button>
             </div>
           ) : null}
         </TableCell>
@@ -258,6 +267,8 @@ function DeploymentRow({ deployment, canWrite }: { deployment: Deployment; canWr
           <TableCell colSpan={6} className="bg-muted/20">
             {action === 'end' ? (
               <EndForm deployment={deployment} onDone={() => setAction(null)} />
+            ) : action === 'correct' ? (
+              <CorrectForm deployment={deployment} onDone={() => setAction(null)} />
             ) : (
               <ExtendForm deployment={deployment} onDone={() => setAction(null)} />
             )}
@@ -265,6 +276,117 @@ function DeploymentRow({ deployment, canWrite }: { deployment: Deployment; canWr
         </TableRow>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Correct a deployment in place.
+ *
+ * Deliberately separate from Extend. An extension is a new commercial fact with
+ * its own dates and its own billing; this is fixing a role title or a rate that
+ * was typed wrong on the way in. Confusing the two would rewrite history that
+ * somebody has already invoiced against.
+ *
+ * Notes are accepted by the API but absent from the response, so there is no
+ * field for them here: an input that always renders empty and saves on submit
+ * would wipe whatever is stored the first time anybody corrected a rate.
+ */
+function CorrectForm({ deployment, onDone }: { deployment: Deployment; onDone: () => void }) {
+  const can = useAuthStore((state) => state.can);
+  const update = useUpdateDeployment(deployment.id);
+  const [roleTitle, setRoleTitle] = React.useState(deployment.role_title ?? '');
+  const [location, setLocation] = React.useState(deployment.location ?? '');
+  const [billRate, setBillRate] = React.useState(deployment.bill_rate ?? '');
+  const [costRate, setCostRate] = React.useState(deployment.cost_rate ?? '');
+
+  const canSeeBill = can('billing.rate:view');
+  const canSeeCost = can('resource.cost:view');
+
+  return (
+    <div className="space-y-3 rounded-md border bg-background p-3">
+      <p className="text-sm font-medium">Correct this deployment</p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor={`role-${deployment.id}`}>Role title</Label>
+          <Input
+            id={`role-${deployment.id}`}
+            value={roleTitle}
+            onChange={(event) => setRoleTitle(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`loc-${deployment.id}`}>Location</Label>
+          <Input
+            id={`loc-${deployment.id}`}
+            value={location}
+            onChange={(event) => setLocation(event.target.value)}
+          />
+        </div>
+      </div>
+
+      {canSeeBill || canSeeCost ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {canSeeBill ? (
+            <div className="space-y-1.5">
+              <Label htmlFor={`bill-${deployment.id}`}>Bill rate</Label>
+              <Input
+                id={`bill-${deployment.id}`}
+                type="number"
+                min={0}
+                value={billRate ?? ''}
+                onChange={(event) => setBillRate(event.target.value)}
+              />
+            </div>
+          ) : null}
+          {canSeeCost ? (
+            <div className="space-y-1.5">
+              <Label htmlFor={`cost-rate-${deployment.id}`}>Cost rate</Label>
+              <Input
+                id={`cost-rate-${deployment.id}`}
+                type="number"
+                min={0}
+                value={costRate ?? ''}
+                onChange={(event) => setCostRate(event.target.value)}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <p className="text-xs text-muted-foreground">
+        Changing a rate here corrects what this engagement was agreed at. To record a
+        renegotiation, use <strong>Extend</strong> instead — that creates a new period and leaves
+        the months already billed alone.
+      </p>
+
+      {update.isError ? (
+        <ErrorState error={update.error} title="The correction was not saved" />
+      ) : null}
+
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          loading={update.isPending}
+          onClick={() =>
+            update.mutate(
+              {
+                role_title: roleTitle.trim() || null,
+                location: location.trim() || null,
+                ...(canSeeBill ? { bill_rate: billRate || null } : {}),
+                ...(canSeeCost ? { cost_rate: costRate || null } : {}),
+              },
+              { onSuccess: onDone },
+            )
+          }
+        >
+          Save correction
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </div>
   );
 }
 

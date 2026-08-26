@@ -1,10 +1,11 @@
 'use client';
 
-import { ArrowLeft, GitBranch, Sparkles } from 'lucide-react';
+import { Archive, ArrowLeft, GitBranch, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
+import { ConfirmAction } from '@/components/confirm-action';
 import { ParseReview } from '@/components/demand/parse-review';
 import { RequirementStatusForm } from '@/components/demand/status-form';
 import { RequirementScore } from '@/components/scoring/opportunity-board';
@@ -19,7 +20,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useRequirement, useRequirementHistory } from '@/hooks/use-requirements';
+import {
+  useArchiveRequirement,
+  useRequirement,
+  useRequirementHistory,
+} from '@/hooks/use-requirements';
 import { useAuthStore } from '@/lib/auth-store';
 import {
   CONTRACT_TYPE_LABELS,
@@ -42,6 +47,8 @@ export default function RequirementDetailPage() {
   const requirement = useRequirement(requirementId);
   const history = useRequirementHistory(requirementId);
   const [statusOpen, setStatusOpen] = React.useState(false);
+  const archive = useArchiveRequirement();
+  const router = useRouter();
 
   if (!can('requirement:read')) return <PermissionDeniedState />;
 
@@ -95,12 +102,29 @@ export default function RequirementDetailPage() {
           </span>
         }
         actions={
-          can('requirement:update') ? (
-            <Button variant="outline" onClick={() => setStatusOpen((value) => !value)}>
-              <GitBranch aria-hidden />
-              Change status
-            </Button>
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            {can('requirement:update') ? (
+              <Button variant="outline" onClick={() => setStatusOpen((value) => !value)}>
+                <GitBranch aria-hidden />
+                Change status
+              </Button>
+            ) : null}
+            {can('requirement:delete') ? (
+              <ConfirmAction
+                variant="outline"
+                size="default"
+                icon={<Archive aria-hidden />}
+                label="Archive requirement"
+                confirmLabel="Confirm archive"
+                isPending={archive.isPending}
+                successMessage={`${data.title} archived.`}
+                errorMessage="The requirement could not be archived."
+                onConfirm={() =>
+                  archive.mutateAsync(data.id).then(() => router.push('/demand/requirements'))
+                }
+              />
+            ) : null}
+          </div>
         }
       />
 

@@ -121,6 +121,20 @@ export function useUpdateRequirement(id: string) {
   });
 }
 
+/**
+ * Archive a requirement.
+ *
+ * Soft-delete. Submissions and scores that referenced it keep their meaning —
+ * a requirement withdrawn by the client is still why the work was done.
+ */
+export function useArchiveRequirement() {
+  const invalidate = useInvalidateRequirements();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/requirements/${id}`),
+    onSuccess: invalidate,
+  });
+}
+
 export function useParseText() {
   const invalidate = useInvalidateRequirements();
   return useMutation({

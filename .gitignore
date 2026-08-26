@@ -2,3 +2,6 @@ node_modules/
 .next/
 .env
 .env.local
+
+# Verification builds (see next.config distDir)
+.next-verify/

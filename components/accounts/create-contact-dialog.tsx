@@ -17,10 +17,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useCreateContact } from '@/hooks/use-accounts';
+import { Select } from '@/components/ui/select';
+import { useAccounts, useCreateContact } from '@/hooks/use-accounts';
 import { ApiError } from '@/lib/api';
 
 const schema = z.object({
+  account_id: z.string().optional(),
   full_name: z.string().min(2, 'A name is required'),
   title: z.string().optional(),
   email: z.string().email('Enter a valid email').optional().or(z.literal('')),
@@ -34,6 +36,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const DEFAULTS: FormValues = {
+  account_id: '',
   full_name: '',
   title: '',
   email: '',
@@ -51,9 +54,12 @@ export function CreateContactDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  accountId: string;
+  /** Fixed account (account detail page). Omit to show an account picker. */
+  accountId?: string;
 }) {
   const createContact = useCreateContact();
+  // Only needed when no fixed account is supplied; the query is cached and cheap.
+  const accounts = useAccounts({ page_size: 100 });
   const [serverError, setServerError] = React.useState<string | null>(null);
 
   const {
@@ -75,9 +81,14 @@ export function CreateContactDialog({
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
+    const targetAccountId = accountId ?? values.account_id;
+    if (!targetAccountId) {
+      setServerError('Choose the account this contact belongs to.');
+      return;
+    }
     try {
       await createContact.mutateAsync({
-        account_id: accountId,
+        account_id: targetAccountId,
         full_name: values.full_name,
         title: values.title || null,
         email: values.email || null,
@@ -108,6 +119,20 @@ export function CreateContactDialog({
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
+          {!accountId && (
+            <div className="space-y-1.5">
+              <Label htmlFor="account_id">Account</Label>
+              <Select id="account_id" {...register('account_id')}>
+                <option value="">Select an account…</option>
+                {(accounts.data?.items ?? []).map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="full_name">Full name</Label>

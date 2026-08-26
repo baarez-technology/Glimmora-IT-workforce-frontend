@@ -1,8 +1,8 @@
 'use client';
 
-import { ArrowLeft, Pencil, Plus, Star, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -13,7 +13,9 @@ import { CreateContactDialog } from '@/components/accounts/create-contact-dialog
 import { CreateProjectDialog } from '@/components/accounts/create-project-dialog';
 import { LogActivityDialog } from '@/components/accounts/log-activity-dialog';
 import { EditAccountDialog } from '@/components/accounts/edit-account-dialog';
+import { EditProjectDialog } from '@/components/accounts/edit-project-dialog';
 import { EditContactDialog } from '@/components/accounts/edit-contact-dialog';
+import { ConfirmAction } from '@/components/confirm-action';
 import { PageHeader } from '@/components/layout/page-header';
 import {
   CardLoadingState,
@@ -29,7 +31,10 @@ import {
   useAccount,
   useAccountRoutes,
   useAccountTimeline,
+  useArchiveAccount,
+  useArchiveProject,
   useContacts,
+  useDeleteContact,
   useProjects,
   useRemoveRoute,
 } from '@/hooks/use-accounts';
@@ -42,7 +47,7 @@ import {
 import { ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatDate, humanizeEnum } from '@/lib/format';
-import type { Contact } from '@/types/accounts';
+import type { Contact, Project } from '@/types/accounts';
 
 export default function AccountDetailPage() {
   const params = useParams<{ id: string }>();
@@ -53,6 +58,11 @@ export default function AccountDetailPage() {
   const [contactOpen, setContactOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [editingContact, setEditingContact] = React.useState<Contact | null>(null);
+  const [editingProject, setEditingProject] = React.useState<Project | null>(null);
+  const archiveAccount = useArchiveAccount();
+  const removeContact = useDeleteContact();
+  const archiveProject = useArchiveProject();
+  const router = useRouter();
   const [projectOpen, setProjectOpen] = React.useState(false);
   const [routeOpen, setRouteOpen] = React.useState(false);
 
@@ -129,6 +139,23 @@ export default function AccountDetailPage() {
                 <Plus aria-hidden />
                 Log activity
               </Button>
+            ) : null}
+            {can('account:delete') ? (
+              <ConfirmAction
+                variant="outline"
+                size="default"
+                icon={<Archive aria-hidden />}
+                label="Archive account"
+                confirmLabel="Confirm archive"
+                isPending={archiveAccount.isPending}
+                successMessage={`${data.name} archived.`}
+                errorMessage="The account could not be archived."
+                onConfirm={() =>
+                  archiveAccount
+                    .mutateAsync(data.id)
+                    .then(() => router.push('/accounts/customers'))
+                }
+              />
             ) : null}
           </div>
         }
@@ -272,14 +299,25 @@ export default function AccountDetailPage() {
                             </div>
                           </div>
                           {can('contact:write') ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setEditingContact(contact)}
-                              aria-label={`Edit ${contact.full_name}`}
-                            >
-                              <Pencil aria-hidden />
-                            </Button>
+                            <div className="flex shrink-0 gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingContact(contact)}
+                                aria-label={`Edit ${contact.full_name}`}
+                              >
+                                <Pencil aria-hidden />
+                              </Button>
+                              <ConfirmAction
+                                iconOnly
+                                label={`Remove ${contact.full_name}`}
+                                confirmLabel="Confirm remove"
+                                successMessage={`${contact.full_name} removed.`}
+                                errorMessage="The contact could not be removed."
+                                isPending={removeContact.isPending}
+                                onConfirm={() => removeContact.mutateAsync(contact.id)}
+                              />
+                            </div>
                           ) : null}
                         </li>
                       ))}
@@ -309,7 +347,8 @@ export default function AccountDetailPage() {
                   {projects.data && projects.data.items.length > 0 ? (
                     <ul className="divide-y">
                       {projects.data.items.map((project) => (
-                        <li key={project.id} className="py-3">
+                        <li key={project.id} className="flex items-start gap-3 py-3">
+                          <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-medium">{project.name}</span>
                             <Badge variant={PROJECT_STATUS_VARIANT[project.status]}>
@@ -332,6 +371,29 @@ export default function AccountDetailPage() {
                             {formatDate(project.start_date)} → {formatDate(project.end_date)}
                             {project.location ? ` · ${project.location}` : ''}
                           </div>
+                          </div>
+                          {can('project:write') ? (
+                            <div className="flex shrink-0 gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingProject(project)}
+                                aria-label={`Edit ${project.name}`}
+                              >
+                                <Pencil aria-hidden />
+                              </Button>
+                              <ConfirmAction
+                                iconOnly
+                                icon={<Archive aria-hidden />}
+                                label={`Archive ${project.name}`}
+                                confirmLabel="Confirm archive"
+                                successMessage={`${project.name} archived.`}
+                                errorMessage="The project could not be archived."
+                                isPending={archiveProject.isPending}
+                                onConfirm={() => archiveProject.mutateAsync(project.id)}
+                              />
+                            </div>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
@@ -383,6 +445,15 @@ export default function AccountDetailPage() {
       )}
 
       <EditAccountDialog open={editOpen} onOpenChange={setEditOpen} account={data} />
+      {editingProject ? (
+        <EditProjectDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditingProject(null);
+          }}
+          project={editingProject}
+        />
+      ) : null}
       {editingContact ? (
         <EditContactDialog
           open

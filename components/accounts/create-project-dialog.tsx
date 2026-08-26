@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { useCreateProject, useTechnologies } from '@/hooks/use-accounts';
+import { useAccounts, useCreateProject, useTechnologies } from '@/hooks/use-accounts';
 import { PROJECT_STATUS_ORDER } from '@/lib/accounts';
 import { ApiError } from '@/lib/api';
 import { humanizeEnum } from '@/lib/format';
@@ -26,6 +26,7 @@ import type { ProjectStatus } from '@/types/accounts';
 
 const schema = z
   .object({
+    account_id: z.string().optional(),
     name: z.string().min(2, 'A project name is required'),
     code: z.string().optional(),
     status: z.enum(['PLANNED', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED']),
@@ -43,6 +44,7 @@ const schema = z
 type FormValues = z.infer<typeof schema>;
 
 const DEFAULTS: FormValues = {
+  account_id: '',
   name: '',
   code: '',
   status: 'PLANNED',
@@ -59,10 +61,12 @@ export function CreateProjectDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  accountId: string;
+  /** Fixed account (account detail page). Omit to show an account picker. */
+  accountId?: string;
 }) {
   const createProject = useCreateProject();
   const technologies = useTechnologies();
+  const accounts = useAccounts({ page_size: 100 });
   const [selectedTech, setSelectedTech] = React.useState<string[]>([]);
   const [serverError, setServerError] = React.useState<string | null>(null);
 
@@ -91,9 +95,14 @@ export function CreateProjectDialog({
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
+    const targetAccountId = accountId ?? values.account_id;
+    if (!targetAccountId) {
+      setServerError('Choose the account this project belongs to.');
+      return;
+    }
     try {
       await createProject.mutateAsync({
-        account_id: accountId,
+        account_id: targetAccountId,
         name: values.name,
         code: values.code || null,
         status: values.status as ProjectStatus,
@@ -124,6 +133,20 @@ export function CreateProjectDialog({
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
+          {!accountId && (
+            <div className="space-y-1.5">
+              <Label htmlFor="account_id">Account</Label>
+              <Select id="account_id" {...register('account_id')}>
+                <option value="">Select an account…</option>
+                {(accounts.data?.items ?? []).map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="name">Project name</Label>

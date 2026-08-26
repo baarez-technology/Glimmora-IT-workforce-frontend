@@ -1,8 +1,12 @@
 'use client';
 
+import { Archive, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 
+import { CreateProjectDialog } from '@/components/accounts/create-project-dialog';
+import { EditProjectDialog } from '@/components/accounts/edit-project-dialog';
+import { ConfirmAction } from '@/components/confirm-action';
 import { PageHeader } from '@/components/layout/page-header';
 import {
   EmptyState,
@@ -24,11 +28,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useProjects, useTechnologies, type ProjectQuery } from '@/hooks/use-accounts';
+import {
+  useArchiveProject,
+  useProjects,
+  useTechnologies,
+  type ProjectQuery,
+} from '@/hooks/use-accounts';
 import { PROJECT_STATUS_ORDER, PROJECT_STATUS_VARIANT } from '@/lib/accounts';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatDate, humanizeEnum } from '@/lib/format';
-import type { ProjectStatus } from '@/types/accounts';
+import type { Project, ProjectStatus } from '@/types/accounts';
 
 const EMPTY_QUERY: ProjectQuery = { page: 1, page_size: 25, q: '', status: '', technology_id: '' };
 
@@ -36,6 +45,7 @@ export default function ProjectsPage() {
   const can = useAuthStore((state) => state.can);
   const [query, setQuery] = React.useState<ProjectQuery>(EMPTY_QUERY);
   const [search, setSearch] = React.useState('');
+  const [addOpen, setAddOpen] = React.useState(false);
 
   React.useEffect(() => {
     const timer = setTimeout(() => setQuery((q) => ({ ...q, q: search, page: 1 })), 300);
@@ -43,6 +53,9 @@ export default function ProjectsPage() {
   }, [search]);
 
   const projects = useProjects(query);
+  const archive = useArchiveProject();
+  const [editing, setEditing] = React.useState<Project | null>(null);
+  const canWrite = can('project:write');
   const technologies = useTechnologies();
 
   if (!can('project:read')) return <PermissionDeniedState />;
@@ -54,6 +67,14 @@ export default function ProjectsPage() {
       <PageHeader
         title="Projects"
         description="Client projects and their technology stacks. Projects are where requirements come from — and where account expansion is spotted before a vacancy is ever advertised."
+        actions={
+          can('project:write') ? (
+            <Button onClick={() => setAddOpen(true)}>
+              <Plus aria-hidden />
+              Add project
+            </Button>
+          ) : undefined
+        }
       />
 
       <Card>
@@ -113,7 +134,7 @@ export default function ProjectsPage() {
             ) : (
               <EmptyState
                 title="No projects yet"
-                description="Projects are created from an account's detail page so they stay attached to the client they belong to."
+                description="Add a project with the button above, or from an account's detail page — either way it stays attached to the client it belongs to."
               />
             )
           ) : (
@@ -125,6 +146,7 @@ export default function ProjectsPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Technologies</TableHead>
                   <TableHead>Dates</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -172,6 +194,30 @@ export default function ProjectsPage() {
                       <br />
                       {formatDate(project.end_date)}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {canWrite ? (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditing(project)}
+                            aria-label={`Edit ${project.name}`}
+                          >
+                            <Pencil aria-hidden />
+                          </Button>
+                          <ConfirmAction
+                            iconOnly
+                            icon={<Archive aria-hidden />}
+                            label={`Archive ${project.name}`}
+                            confirmLabel="Confirm archive"
+                            successMessage={`${project.name} archived.`}
+                            errorMessage="The project could not be archived."
+                            isPending={archive.isPending}
+                            onConfirm={() => archive.mutateAsync(project.id)}
+                          />
+                        </div>
+                      ) : null}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -205,6 +251,18 @@ export default function ProjectsPage() {
           )}
         </CardContent>
       </Card>
+
+      {editing ? (
+        <EditProjectDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditing(null);
+          }}
+          project={editing}
+        />
+      ) : null}
+
+      <CreateProjectDialog open={addOpen} onOpenChange={setAddOpen} />
     </>
   );
 }

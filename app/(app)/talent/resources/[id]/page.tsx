@@ -1,13 +1,14 @@
 'use client';
 
-import { ArrowLeft, Download, FilePlus, Lock, Pencil, ShieldAlert, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, Download, FilePlus, Lock, Pencil, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import * as React from 'react';
-import { toast } from 'sonner';
 
+import { ConfirmAction } from '@/components/confirm-action';
 import { PageHeader } from '@/components/layout/page-header';
 import { CVReviewDialog } from '@/components/talent/cv-upload-dialog';
+import { DocumentEditDialog } from '@/components/talent/document-edit-dialog';
 import { DocumentUploadDialog } from '@/components/talent/document-upload-dialog';
 import { ResourceFormDialog } from '@/components/talent/resource-form-dialog';
 import {
@@ -23,11 +24,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   documentDownloadUrl,
+  useArchiveResource,
   useDeleteDocument,
   useResource,
   useResourceDocuments,
 } from '@/hooks/use-talent';
-import { ApiError } from '@/lib/api';
+
 import { useAuthStore } from '@/lib/auth-store';
 import { formatDate, humanizeEnum } from '@/lib/format';
 import {
@@ -40,6 +42,7 @@ import {
   formatFileSize,
   formatRate,
 } from '@/lib/talent';
+import type { ResourceDocument } from '@/types/talent';
 
 export default function ResourceDetailPage() {
   const params = useParams<{ id: string }>();
@@ -52,6 +55,10 @@ export default function ResourceDetailPage() {
   const [editOpen, setEditOpen] = React.useState(false);
   const [reviewOpen, setReviewOpen] = React.useState(false);
   const [uploadOpen, setUploadOpen] = React.useState(false);
+  const [editingDocument, setEditingDocument] = React.useState<ResourceDocument | null>(null);
+  const router = useRouter();
+  const archive = useArchiveResource();
+  const removeDocument = useDeleteDocument();
 
   if (!can('resource:read')) return <PermissionDeniedState />;
 
@@ -104,12 +111,31 @@ export default function ResourceDetailPage() {
           </span>
         }
         actions={
-          canEdit ? (
-            <Button variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil aria-hidden />
-              Edit profile
-            </Button>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            {canEdit ? (
+              <Button variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil aria-hidden />
+                Edit profile
+              </Button>
+            ) : null}
+            {can('resource:delete') ? (
+              <ConfirmAction
+                variant="outline"
+                size="default"
+                icon={<Archive aria-hidden />}
+                label="Archive consultant"
+                confirmLabel="Confirm archive"
+                isPending={archive.isPending}
+                disabled={data.availability_status === 'DEPLOYED'}
+                disabledReason="They are on a live deployment. End it first."
+                successMessage={`${data.full_name} archived.`}
+                errorMessage="The consultant could not be archived."
+                onConfirm={() =>
+                  archive.mutateAsync(data.id).then(() => router.push('/talent/resources'))
+                }
+              />
+            ) : null}
+          </div>
         }
       />
 
@@ -361,10 +387,25 @@ export default function ResourceDetailPage() {
                           </span>
                         )}
                         {canWriteDocuments ? (
-                          <DeleteDocumentButton
-                            documentId={document.id}
-                            label={document.doc_type_label}
-                          />
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingDocument(document)}
+                              aria-label={`Edit ${document.doc_type_label}`}
+                            >
+                              <Pencil aria-hidden />
+                            </Button>
+                            <ConfirmAction
+                              iconOnly
+                              label={`Delete ${document.doc_type_label}`}
+                              confirmLabel="Confirm delete"
+                              successMessage={`${document.doc_type_label} deleted.`}
+                              errorMessage="The document could not be deleted."
+                              isPending={removeDocument.isPending}
+                              onConfirm={() => removeDocument.mutateAsync(document.id)}
+                            />
+                          </>
                         ) : null}
                       </div>
                     </li>
@@ -409,56 +450,16 @@ export default function ResourceDetailPage() {
           />
         </>
       ) : null}
+      {editingDocument ? (
+        <DocumentEditDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditingDocument(null);
+          }}
+          document={editingDocument}
+        />
+      ) : null}
     </>
-  );
-}
-
-/**
- * Deleting a document is a two-press action.
- *
- * A passport removed by a misclick is a real loss — the file is gone from the
- * store, and the expiry it carried stops being tracked.
- */
-function DeleteDocumentButton({ documentId, label }: { documentId: string; label: string }) {
-  const remove = useDeleteDocument();
-  const [confirming, setConfirming] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!confirming) return;
-    const timer = setTimeout(() => setConfirming(false), 4000);
-    return () => clearTimeout(timer);
-  }, [confirming]);
-
-  if (!confirming) {
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setConfirming(true)}
-        aria-label={`Delete ${label}`}
-      >
-        <Trash2 aria-hidden />
-      </Button>
-    );
-  }
-
-  return (
-    <Button
-      variant="destructive"
-      size="sm"
-      loading={remove.isPending}
-      onClick={() =>
-        remove.mutate(documentId, {
-          onSuccess: () => toast.success(`${label} deleted.`),
-          onError: (error) =>
-            toast.error(
-              error instanceof ApiError ? error.message : 'The document could not be deleted.',
-            ),
-        })
-      }
-    >
-      Confirm delete
-    </Button>
   );
 }
 

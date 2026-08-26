@@ -1,8 +1,10 @@
 'use client';
 
+import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 
+import { CreateContactDialog } from '@/components/accounts/create-contact-dialog';
 import { PageHeader } from '@/components/layout/page-header';
 import {
   EmptyState,
@@ -33,6 +35,7 @@ export default function ContactsPage() {
   const can = useAuthStore((state) => state.can);
   const [query, setQuery] = React.useState<ContactQuery>(EMPTY_QUERY);
   const [search, setSearch] = React.useState('');
+  const [addOpen, setAddOpen] = React.useState(false);
 
   React.useEffect(() => {
     const timer = setTimeout(() => setQuery((q) => ({ ...q, q: search, page: 1 })), 300);
@@ -50,6 +53,14 @@ export default function ContactsPage() {
       <PageHeader
         title="Contacts"
         description="The people behind each account. Marking a decision maker is worth 10 points of Addressability — it is the difference between knowing an organisation and knowing who signs."
+        actions={
+          can('contact:write') ? (
+            <Button onClick={() => setAddOpen(true)}>
+              <Plus aria-hidden />
+              Add contact
+            </Button>
+          ) : undefined
+        }
       />
 
       <Card>
@@ -96,7 +107,7 @@ export default function ContactsPage() {
             ) : (
               <EmptyState
                 title="No contacts yet"
-                description="Contacts are added from an account's detail page, so each one stays attached to the organisation it belongs to."
+                description="Add a contact with the button above, or from an account's detail page — either way it stays attached to the organisation it belongs to."
               />
             )
           ) : (
@@ -170,6 +181,8 @@ export default function ContactsPage() {
           )}
         </CardContent>
       </Card>
+
+      <CreateContactDialog open={addOpen} onOpenChange={setAddOpen} />
     </>
   );
 }

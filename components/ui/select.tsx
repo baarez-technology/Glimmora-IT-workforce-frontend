@@ -17,6 +17,7 @@ const Select = React.forwardRef<HTMLSelectElement, React.ComponentProps<'select'
         'disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
+      suppressHydrationWarning
       {...props}
     >
       {children}

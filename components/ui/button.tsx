@@ -42,11 +42,16 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, loading = false, children, disabled, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
     return (
+      // suppressHydrationWarning: autofill extensions stamp `fdprocessedid`
+      // onto submit buttons before React hydrates. See components/ui/input.tsx
+      // for the full reasoning -- it covers this element's attributes only, so
+      // a real mismatch inside the button still warns.
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
         aria-busy={loading || undefined}
+        suppressHydrationWarning
         {...props}
       >
         {loading ? (

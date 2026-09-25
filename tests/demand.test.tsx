@@ -70,6 +70,28 @@ const PARSE_RESULT: ParseResult = {
       evidence_end: null,
     },
     {
+      field: 'mandatory_skills',
+      label: 'Mandatory skills',
+      value: ['SAP FICO', 'SAP S/4HANA'],
+      confidence: 0.9,
+      level: 'HIGH',
+      requires_confirmation: false,
+      evidence: 'SAP FICO',
+      evidence_start: null,
+      evidence_end: null,
+    },
+    {
+      field: 'preferred_skills',
+      label: 'Preferred skills',
+      value: [],
+      confidence: 0.5,
+      level: 'LOW',
+      requires_confirmation: false,
+      evidence: null,
+      evidence_start: null,
+      evidence_end: null,
+    },
+    {
       field: 'duration_months',
       label: 'Duration (months)',
       value: null,
@@ -92,7 +114,7 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 function mockApi(result: ParseResult = PARSE_RESULT, acceptStatus = 200) {
-  return vi.fn(async (input: RequestInfo | URL) => {
+  return vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
     const url = String(input);
     if (url.includes('/parse-result')) {
       return new Response(JSON.stringify(result), {
@@ -117,6 +139,14 @@ function mockApi(result: ParseResult = PARSE_RESULT, acceptStatus = 200) {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
+    }
+    if (url.includes('/skills')) {
+      return new Response(
+        JSON.stringify([
+          { id: 'sk-1', name: 'Kubernetes', category: 'Cloud', needs_review: false },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
     }
     if (url.includes('/reject-parse')) {
       return new Response(JSON.stringify({ id: 'req-1', review_status: 'REJECTED' }), {
@@ -267,5 +297,102 @@ describe('demand formatting', () => {
   it('labels demand sources in SOW pursuit-priority order', () => {
     expect(PRIORITY_SOURCE_LABELS.P1_EXISTING_CUSTOMER).toContain('P1');
     expect(PRIORITY_SOURCE_LABELS.P5_VENDOR_MSP_VMS).toContain('VMS');
+  });
+});
+
+/* ------------------------------------------------------- editing the skills */
+
+/** Confirm the two flagged fields so the Accept button becomes usable. */
+async function confirmEverything() {
+  await userEvent.click(await screen.findByRole('button', { name: /Confirm all as shown/i }));
+}
+
+function acceptBody(fetchMock: ReturnType<typeof mockApi>) {
+  const call = fetchMock.mock.calls.find((entry) =>
+    String(entry[0]).includes('/accept-parse'),
+  );
+  return call?.[1]?.body ? JSON.parse(String(call[1].body)) : null;
+}
+
+describe('skills during parse review', () => {
+  it('lists the extracted mandatory skills as removable entries', async () => {
+    vi.stubGlobal('fetch', mockApi());
+    render(<ParseReview requirementId="req-1" />, { wrapper });
+
+    expect(await screen.findByRole('button', { name: 'Remove SAP FICO' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove SAP S/4HANA' })).toBeInTheDocument();
+  });
+
+  it('offers a way to add a skill the job description never mentioned', async () => {
+    // The parser reads the document; the recruiter knows what was said on the
+    // call. Without this the only options were to accept an incomplete list or
+    // fix it after matching had already run.
+    const fetchMock = mockApi();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ParseReview requirementId="req-1" />, { wrapper });
+
+    const input = await screen.findByLabelText('New mandatory skill');
+    await userEvent.type(input, 'Kubernetes');
+    await userEvent.click(screen.getByRole('button', { name: 'Add mandatory skill' }));
+
+    expect(await screen.findByRole('button', { name: 'Remove Kubernetes' })).toBeInTheDocument();
+
+    await confirmEverything();
+    await userEvent.click(screen.getByRole('button', { name: /Accept requirement/i }));
+
+    await waitFor(() => expect(acceptBody(fetchMock)).not.toBeNull());
+    expect(acceptBody(fetchMock).skills).toEqual([
+      { name: 'SAP FICO', importance: 'MANDATORY' },
+      { name: 'SAP S/4HANA', importance: 'MANDATORY' },
+      { name: 'Kubernetes', importance: 'MANDATORY' },
+    ]);
+  });
+
+  it("leaves the parser's own list alone when nothing was edited", async () => {
+    // Sending `skills` replaces the whole list server-side, so an untouched
+    // review must not send it at all.
+    const fetchMock = mockApi();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ParseReview requirementId="req-1" />, { wrapper });
+
+    await confirmEverything();
+    await userEvent.click(screen.getByRole('button', { name: /Accept requirement/i }));
+
+    await waitFor(() => expect(acceptBody(fetchMock)).not.toBeNull());
+    expect(acceptBody(fetchMock)).not.toHaveProperty('skills');
+  });
+
+  it('removes a skill the parser got wrong', async () => {
+    const fetchMock = mockApi();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ParseReview requirementId="req-1" />, { wrapper });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove SAP S/4HANA' }));
+    await confirmEverything();
+    await userEvent.click(screen.getByRole('button', { name: /Accept requirement/i }));
+
+    await waitFor(() => expect(acceptBody(fetchMock)).not.toBeNull());
+    expect(acceptBody(fetchMock).skills).toEqual([
+      { name: 'SAP FICO', importance: 'MANDATORY' },
+    ]);
+  });
+
+  it('refuses to add the same skill twice', async () => {
+    vi.stubGlobal('fetch', mockApi());
+    render(<ParseReview requirementId="req-1" />, { wrapper });
+
+    const input = await screen.findByLabelText('New mandatory skill');
+    await userEvent.type(input, 'sap fico');
+
+    expect(screen.getByText(/already on this list/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add mandatory skill' })).toBeDisabled();
+  });
+
+  it('still offers an editor when the parser found no preferred skills', async () => {
+    vi.stubGlobal('fetch', mockApi());
+    render(<ParseReview requirementId="req-1" />, { wrapper });
+
+    expect(await screen.findByLabelText('New preferred skill')).toBeInTheDocument();
+    expect(screen.getByText(/None extracted/i)).toBeInTheDocument();
   });
 });

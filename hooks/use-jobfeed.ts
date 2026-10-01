@@ -11,6 +11,10 @@ import type {
   JobFeedQuery,
   RegisterInput,
   RegisteredUser,
+  SearchAvailability,
+  SearchRequest,
+  SearchRun,
+  SearchStarted,
 } from '@/types/jobfeed';
 
 export const jobFeedKeys = {
@@ -93,5 +97,44 @@ export function useAddJob() {
   return useMutation({
     mutationFn: (input: AddJobInput) => api.post<JobFeedItem>('/job-feed/jobs', input),
     onSuccess: invalidate,
+  });
+}
+
+/* ------------------------------------------------------------ job search */
+
+/**
+ * Whether search is configured at all.
+ *
+ * With no provider the screen hides rather than offering a box that can never
+ * return anything.
+ */
+export function useSearchAvailability() {
+  return useQuery({
+    queryKey: ['job-search', 'available'],
+    queryFn: () => api.get<SearchAvailability>('/job-feed/search/available'),
+    staleTime: 60 * 60_000,
+  });
+}
+
+export function useStartSearch() {
+  return useMutation({
+    mutationFn: (input: SearchRequest) => api.post<SearchStarted>('/job-feed/search', input),
+  });
+}
+
+/**
+ * Poll a running search.
+ *
+ * A provider run takes about thirty seconds, so the request that starts it
+ * returns a handle and this collects the answer. Polling stops the moment the
+ * run leaves RUNNING.
+ */
+export function useSearchRun(searchId: string | null) {
+  return useQuery({
+    queryKey: ['job-search', 'run', searchId],
+    queryFn: () => api.get<SearchRun>(`/job-feed/search/${searchId}`),
+    enabled: Boolean(searchId),
+    refetchInterval: (query) =>
+      query.state.data?.status === 'RUNNING' ? 4_000 : false,
   });
 }

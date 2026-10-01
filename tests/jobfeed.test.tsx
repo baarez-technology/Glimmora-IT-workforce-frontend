@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JobFeed } from '@/components/jobfeed/job-feed';
+import { JobSearch } from '@/components/jobfeed/job-search';
 import { useAuthStore } from '@/lib/auth-store';
 import { WORKPLACE_LABELS, WORKPLACE_ORDER, jobSubtitle } from '@/lib/jobfeed';
 import { NAVIGATION, isVisibleTo } from '@/lib/navigation';
@@ -200,7 +201,11 @@ describe('an individual is not staff', () => {
       isVisibleTo(item, individual),
     );
 
-    expect(visible.map((item) => item.href).sort()).toEqual(['/jobs/feed', '/jobs/saved']);
+    expect(visible.map((item) => item.href).sort()).toEqual([
+      '/jobs/feed',
+      '/jobs/saved',
+      '/jobs/search',
+    ]);
   });
 
   it('sees no staff screen at all', () => {
@@ -229,5 +234,90 @@ describe('an individual is not staff', () => {
 
     expect(visible).toContain('/sales/pipeline');
     expect(visible).not.toContain('/jobs/feed');
+  });
+});
+
+/* ------------------------------------------------------------ job search */
+
+function mockSearchApi(
+  options: { available?: boolean; results?: unknown[]; stillRunning?: boolean } = {},
+) {
+  const { available = true, results = [], stillRunning = false } = options;
+  return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/job-feed/search/available')) {
+      return json({ available, provider: available ? 'apify' : null });
+    }
+    if (url.includes('/job-feed/search/')) {
+      return json({
+        search_id: 'run-1',
+        status: stillRunning ? 'RUNNING' : 'SUCCEEDED',
+        results: stillRunning ? [] : results,
+        error: null,
+      });
+    }
+    if (url.includes('/job-feed/search') && init?.method === 'POST') {
+      return json({ search_id: 'run-1', status: 'RUNNING' });
+    }
+    return json({ items: [], total: 0, limit: 50, offset: 0 });
+  });
+}
+
+describe('job search', () => {
+  beforeEach(() => signInAsIndividual());
+
+  it('says so when no provider is configured instead of offering a dead box', async () => {
+    vi.stubGlobal('fetch', mockSearchApi({ available: false }));
+    render(<JobSearch />, { wrapper });
+
+    expect(await screen.findByText(/not configured on this deployment/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Search$/ })).toBeDisabled();
+  });
+
+  it('warns that leaving the arrangement on Any returns unstated results', async () => {
+    // The provider only labels the arrangement when asked for one. Users
+    // should know that before they wonder why everything says "Not stated".
+    vi.stubGlobal('fetch', mockSearchApi());
+    render(<JobSearch />, { wrapper });
+
+    expect(
+      await screen.findByText(/most results arrive without a stated arrangement/i),
+    ).toBeInTheDocument();
+  });
+
+  it('will not search without a title', async () => {
+    vi.stubGlobal('fetch', mockSearchApi());
+    render(<JobSearch />, { wrapper });
+
+    await waitFor(() => expect(screen.getByLabelText('Job titles')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^Search$/ })).toBeDisabled();
+  });
+
+  it('sends the arrangement to the server rather than filtering afterwards', async () => {
+    const fetchMock = mockSearchApi();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<JobSearch />, { wrapper });
+
+    await userEvent.type(await screen.findByLabelText('Job titles'), 'Python Developer');
+    await userEvent.selectOptions(screen.getByLabelText('Arrangement'), 'REMOTE');
+    await userEvent.click(screen.getByRole('button', { name: /^Search$/ }));
+
+    await waitFor(() => {
+      const posted = fetchMock.mock.calls.find(
+        (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+      );
+      expect(posted).toBeDefined();
+      expect(String((posted![1] as RequestInit).body)).toContain('REMOTE');
+    });
+  });
+
+  it('tells the reader a search takes time rather than looking stuck', async () => {
+    vi.stubGlobal('fetch', mockSearchApi({ stillRunning: true }));
+    render(<JobSearch />, { wrapper });
+
+    await userEvent.type(await screen.findByLabelText('Job titles'), 'Developer');
+    await userEvent.click(screen.getByRole('button', { name: /^Search$/ }));
+
+    expect(await screen.findByText(/about thirty seconds/i)).toBeInTheDocument();
   });
 });

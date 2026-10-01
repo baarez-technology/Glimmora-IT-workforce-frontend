@@ -78,6 +78,14 @@ export const NAVIGATION: NavSection[] = [
         description: 'Jobs that reached you, private to your account',
       },
       {
+        label: 'Search',
+        href: '/jobs/search',
+        icon: FileSearch,
+        phase: 13,
+        permission: 'job_feed:read',
+        description: 'The open market, not your feed',
+      },
+      {
         label: 'Saved',
         href: '/jobs/saved',
         icon: BadgeCheck,

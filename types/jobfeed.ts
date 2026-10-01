@@ -84,3 +84,45 @@ export interface RegisteredUser {
   full_name: string;
   role: string;
 }
+
+/* ------------------------------------------------------------ job search */
+
+export type SearchStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+
+export interface SearchRequest {
+  titles: string[];
+  locations?: string[];
+  workplace_type?: WorkplaceType | null;
+  /** '' | 'r2592000' month | 'r604800' week | 'r86400' 24 hours */
+  posted_within?: string | null;
+  rows?: number;
+}
+
+export interface SearchStarted {
+  search_id: string;
+  status: SearchStatus;
+}
+
+export interface SearchResult {
+  title: string;
+  company_name: string | null;
+  location: string | null;
+  country: string | null;
+  workplace_type: WorkplaceType;
+  description: string | null;
+  url: string | null;
+  posted_at: string | null;
+  external_id: string | null;
+}
+
+export interface SearchRun {
+  search_id: string;
+  status: SearchStatus;
+  results: SearchResult[];
+  error: string | null;
+}
+
+export interface SearchAvailability {
+  available: boolean;
+  provider: string | null;
+}

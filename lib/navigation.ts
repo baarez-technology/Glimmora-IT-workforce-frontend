@@ -86,6 +86,14 @@ export const NAVIGATION: NavSection[] = [
         description: 'The open market, not your feed',
       },
       {
+        label: 'Connect Alerts',
+        href: '/jobs/connect',
+        icon: Send,
+        phase: 13,
+        permission: 'job_feed:read',
+        description: 'Forward your LinkedIn alerts into your feed',
+      },
+      {
         label: 'Saved',
         href: '/jobs/saved',
         icon: BadgeCheck,

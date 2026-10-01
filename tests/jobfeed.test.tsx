@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JobFeed } from '@/components/jobfeed/job-feed';
+import { ConnectAlerts } from '@/components/jobfeed/connect-alerts';
 import { JobSearch } from '@/components/jobfeed/job-search';
 import { useAuthStore } from '@/lib/auth-store';
 import { WORKPLACE_LABELS, WORKPLACE_ORDER, jobSubtitle } from '@/lib/jobfeed';
@@ -202,6 +203,7 @@ describe('an individual is not staff', () => {
     );
 
     expect(visible.map((item) => item.href).sort()).toEqual([
+      '/jobs/connect',
       '/jobs/feed',
       '/jobs/saved',
       '/jobs/search',
@@ -319,5 +321,81 @@ describe('job search', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Search$/ }));
 
     expect(await screen.findByText(/about thirty seconds/i)).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------ connect alerts */
+
+function mockConnectApi(connection: Record<string, unknown> = {}) {
+  return vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes('/alerts/connection')) {
+      return json({
+        enabled: true,
+        forwarding_address: 'jobs+abc123@jobs.glimmora.ai',
+        verified: false,
+        count: 0,
+        last_received_at: null,
+        ...connection,
+      });
+    }
+    return json({});
+  });
+}
+
+describe('connecting LinkedIn alerts', () => {
+  beforeEach(() => signInAsIndividual());
+
+  it('does not claim LinkedIn is sending us anything', async () => {
+    // The honesty point. A "Connect with LinkedIn" button would make people
+    // believe LinkedIn delivers the jobs. Their forwarding rule does.
+    vi.stubGlobal('fetch', mockConnectApi());
+    render(<ConnectAlerts />, { wrapper });
+
+    expect(
+      await screen.findByText(/no way to send us your alerts directly/i),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the private forwarding address', async () => {
+    vi.stubGlobal('fetch', mockConnectApi());
+    render(<ConnectAlerts />, { wrapper });
+
+    const field = await screen.findByLabelText('Your forwarding address');
+    expect(field).toHaveValue('jobs+abc123@jobs.glimmora.ai');
+  });
+
+  it('says nothing has arrived rather than implying it works', async () => {
+    vi.stubGlobal('fetch', mockConnectApi());
+    render(<ConnectAlerts />, { wrapper });
+
+    expect(await screen.findByText(/Not connected yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/turns green on its own/i)).toBeInTheDocument();
+  });
+
+  it('confirms once alerts have actually been received', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockConnectApi({ verified: true, count: 3, last_received_at: '2026-10-01T08:00:00Z' }),
+    );
+    render(<ConnectAlerts />, { wrapper });
+
+    expect(await screen.findByText(/Receiving alerts/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 jobs received/i)).toBeInTheDocument();
+  });
+
+  it('warns when forwarding is not switched on yet', async () => {
+    vi.stubGlobal('fetch', mockConnectApi({ enabled: false }));
+    render(<ConnectAlerts />, { wrapper });
+
+    expect(await screen.findByText(/not switched on for this deployment/i)).toBeInTheDocument();
+  });
+
+  it('offers pasting an alert so the feature works before any DNS', async () => {
+    vi.stubGlobal('fetch', mockConnectApi());
+    render(<ConnectAlerts />, { wrapper });
+
+    expect(await screen.findByLabelText('The email')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Import into my feed/i })).toBeDisabled();
   });
 });

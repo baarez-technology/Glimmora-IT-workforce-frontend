@@ -126,3 +126,21 @@ export interface SearchAvailability {
   available: boolean;
   provider: string | null;
 }
+
+/* ---------------------------------------------------------- job alerts */
+
+export interface AlertConnection {
+  enabled: boolean;
+  forwarding_address: string;
+  /** Derived from mail actually received, never from a flag somebody set. */
+  verified: boolean;
+  count: number;
+  last_received_at: string | null;
+}
+
+export interface AlertIngestResult {
+  recognised: boolean;
+  added: number;
+  unparsed: number;
+  message: string | null;
+}

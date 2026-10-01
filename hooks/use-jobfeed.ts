@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type {
   AddJobInput,
+  AlertConnection,
+  AlertIngestResult,
   JobFeedCounts,
   JobFeedItem,
   JobFeedPage,
@@ -136,5 +138,29 @@ export function useSearchRun(searchId: string | null) {
     enabled: Boolean(searchId),
     refetchInterval: (query) =>
       query.state.data?.status === 'RUNNING' ? 4_000 : false,
+  });
+}
+
+/* ---------------------------------------------------------- job alerts */
+
+export function useAlertConnection() {
+  return useQuery({
+    queryKey: ['job-feed', 'alerts', 'connection'],
+    queryFn: () => api.get<AlertConnection>('/job-feed/alerts/connection'),
+  });
+}
+
+/**
+ * Import an alert by pasting it.
+ *
+ * Real on its own, and it means the whole path can be exercised before any
+ * DNS exists.
+ */
+export function usePasteAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { body: string; subject?: string; sender?: string }) =>
+      api.post<AlertIngestResult>('/job-feed/alerts/paste', input),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: jobFeedKeys.all }),
   });
 }

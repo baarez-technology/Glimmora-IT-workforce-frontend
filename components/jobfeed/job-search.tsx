@@ -21,7 +21,13 @@ import { useAddJob, useSearchAvailability, useSearchRun, useStartSearch } from '
 import { ApiError } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth-store';
 import { WORKPLACE_LABELS, WORKPLACE_VARIANT, jobSubtitle } from '@/lib/jobfeed';
-import type { SearchResult, WorkplaceType } from '@/types/jobfeed';
+import type { SearchResult } from '@/types/jobfeed';
+import {
+  applyFilters,
+  EMPTY_FILTERS,
+  SearchFilters,
+  type Filters,
+} from '@/components/jobfeed/search-filters';
 
 /**
  * Search the open job market.
@@ -57,9 +63,13 @@ function ResultCard({ result }: { result: SearchResult }) {
         description: result.description,
         url: result.url,
         posted_at: result.posted_at,
+        // Without these two the button says "Save", the job lands unsaved,
+        // and the Saved tab stays empty.
+        is_saved: true,
+        source: 'SEARCH',
       });
       setSaved(true);
-      toast.success('Saved to your feed.');
+      toast.success('Saved. It is in your feed and under Saved.');
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'That could not be saved.');
     }
@@ -73,6 +83,14 @@ function ResultCard({ result }: { result: SearchResult }) {
             <Badge variant={WORKPLACE_VARIANT[result.workplace_type]}>
               {WORKPLACE_LABELS[result.workplace_type]}
             </Badge>
+            {result.workplace_inferred ? (
+              <span
+                className="text-2xs text-muted-foreground"
+                title="Read from the job text, not stated by the source"
+              >
+                inferred
+              </span>
+            ) : null}
             {result.country ? <Badge variant="outline">{result.country}</Badge> : null}
           </div>
           <p className="mt-1.5 text-sm font-medium">{result.title}</p>
@@ -117,10 +135,11 @@ export function JobSearch() {
 
   const [titles, setTitles] = React.useState('');
   const [location, setLocation] = React.useState('');
-  const [workplace, setWorkplace] = React.useState<WorkplaceType | ''>('');
   const [postedWithin, setPostedWithin] = React.useState('');
+  const [thorough, setThorough] = React.useState(true);
   const [searchId, setSearchId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [filters, setFilters] = React.useState<Filters>(EMPTY_FILTERS);
 
   const run = useSearchRun(searchId);
 
@@ -136,10 +155,12 @@ export function JobSearch() {
           .map((value) => value.trim())
           .filter(Boolean),
         locations: location.trim() ? [location.trim()] : [],
-        workplace_type: workplace || null,
+        workplace_type: null,
         posted_within: postedWithin || null,
+        thorough,
       });
       setSearchId(started.search_id);
+      setFilters(EMPTY_FILTERS);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'The search could not be started.');
     }
@@ -147,6 +168,7 @@ export function JobSearch() {
 
   const running = run.data?.status === 'RUNNING' || start.isPending;
   const results = run.data?.results ?? [];
+  const visible = applyFilters(results, filters);
   const notConfigured = availability.data && !availability.data.available;
 
   return (
@@ -194,23 +216,6 @@ export function JobSearch() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="search_workplace">Arrangement</Label>
-              <Select
-                id="search_workplace"
-                value={workplace}
-                onChange={(event) => setWorkplace(event.target.value as WorkplaceType | '')}
-              >
-                <option value="">Any</option>
-                <option value="REMOTE">Remote</option>
-                <option value="HYBRID">Hybrid</option>
-                <option value="ONSITE">Onsite</option>
-              </Select>
-              <p className="text-2xs text-muted-foreground">
-                Choosing one asks the source for it. Leaving it on Any means most results arrive
-                without a stated arrangement.
-              </p>
-            </div>
-            <div className="space-y-1.5">
               <Label htmlFor="search_posted">Posted</Label>
               <Select
                 id="search_posted"
@@ -225,6 +230,24 @@ export function JobSearch() {
               </Select>
             </div>
           </div>
+
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border bg-muted/40 p-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={thorough}
+              onChange={(event) => setThorough(event.target.checked)}
+            />
+            <span className="text-xs leading-relaxed">
+              <span className="font-medium">Thorough search</span>{' '}
+              <span className="text-muted-foreground">
+                — ask for remote, hybrid and onsite separately and merge them, so every result
+                carries a stated arrangement and the filter beside the results works. Costs three
+                provider runs instead of one. Turn it off for a cheaper search whose results will
+                mostly read &ldquo;Not stated&rdquo;.
+              </span>
+            </span>
+          </label>
 
           <Button
             onClick={() => void submit()}
@@ -272,11 +295,29 @@ export function JobSearch() {
           description="Try a broader title, a wider location, or set the arrangement back to Any."
         />
       ) : results.length > 0 ? (
-        <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">{results.length} results</p>
-          {results.map((result) => (
-            <ResultCard key={result.external_id ?? result.url ?? result.title} result={result} />
-          ))}
+        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <SearchFilters results={results} filters={filters} onChange={setFilters} />
+
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {visible.length === results.length
+                ? `${results.length} results`
+                : `${visible.length} of ${results.length} results`}
+            </p>
+            {visible.length === 0 ? (
+              <EmptyState
+                title="No results match these filters"
+                description="Clear a filter to widen the list. Nothing was re-searched — these are the same results."
+              />
+            ) : (
+              visible.map((result) => (
+                <ResultCard
+                  key={result.external_id ?? result.url ?? result.title}
+                  result={result}
+                />
+              ))
+            )}
+          </div>
         </div>
       ) : null}
     </>

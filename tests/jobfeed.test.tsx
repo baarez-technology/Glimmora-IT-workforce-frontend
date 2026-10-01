@@ -5,7 +5,6 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JobFeed } from '@/components/jobfeed/job-feed';
-import { ConnectAlerts } from '@/components/jobfeed/connect-alerts';
 import { JobSearch } from '@/components/jobfeed/job-search';
 import { useAuthStore } from '@/lib/auth-store';
 import { WORKPLACE_LABELS, WORKPLACE_ORDER, jobSubtitle } from '@/lib/jobfeed';
@@ -34,13 +33,13 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-function signInAsIndividual(permissions = ['job_feed:read', 'job_feed:write']) {
+function signInWithFeed(permissions = ['job_feed:read', 'job_feed:write']) {
   useAuthStore.setState({
     user: {
       id: 'user-1',
       email: 'person@example.com',
       full_name: 'Test Person',
-      role: 'INDIVIDUAL',
+      role: 'SALES',
       is_active: true,
       must_change_password: false,
       permissions,
@@ -58,6 +57,11 @@ function makeItem(overrides: Partial<JobFeedItem> = {}): JobFeedItem {
     received_at: '2026-10-01T08:00:00Z',
     is_read: false,
     is_saved: false,
+    shared_by_name: null,
+    shared_by_role: null,
+    share_note: null,
+    shared_at: null,
+    share_acknowledged: false,
     posting_id: 'posting-1',
     title: 'Senior Python Developer',
     company_name: 'Ras Laffan Logistics',
@@ -131,7 +135,7 @@ describe('workplace presentation', () => {
 /* ------------------------------------------------------------- the feed */
 
 describe('the feed', () => {
-  beforeEach(() => signInAsIndividual());
+  beforeEach(() => signInWithFeed());
 
   it('lists the jobs that reached this person', async () => {
     vi.stubGlobal('fetch', mockApi([makeItem()]));
@@ -175,16 +179,19 @@ describe('the feed', () => {
     expect(await screen.findByText(/never said whether the role is/i)).toBeInTheDocument();
   });
 
-  it('offers somewhere to start when the feed is empty', async () => {
+  it('points an empty feed at search, not at adding a job by hand', async () => {
+    // Adding a job is a hand-off to the team, so it lives on the shared tab.
+    // Offering it here would invite a private pile nobody acts on.
     vi.stubGlobal('fetch', mockApi([]));
     render(<JobFeed />, { wrapper });
 
     expect(await screen.findByText(/No jobs yet/i)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Add a job/i }).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Search the open market/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add a job/i })).not.toBeInTheDocument();
   });
 
   it('refuses the screen to anyone without the permission', () => {
-    signInAsIndividual([]);
+    signInWithFeed([]);
     vi.stubGlobal('fetch', mockApi([]));
     render(<JobFeed />, { wrapper });
 
@@ -194,48 +201,46 @@ describe('the feed', () => {
 
 /* ------------------------------------------------------- the boundary */
 
-describe('an individual is not staff', () => {
-  const individual = { role: 'INDIVIDUAL' as const, permissions: ['job_feed:read', 'job_feed:write'] };
+describe('who holds the job offers workspace', () => {
+  const sourcing = {
+    role: 'SALES' as const,
+    permissions: ['job_feed:read', 'job_feed:write', 'job_feed:share', 'opportunity:read'],
+  };
 
-  it('sees only the two job screens in navigation', () => {
-    const visible = NAVIGATION.flatMap((section) => section.items).filter((item) =>
-      isVisibleTo(item, individual),
+  it('is one sidebar entry, not four', () => {
+    const jobItems = NAVIGATION.flatMap((section) => section.items).filter((item) =>
+      item.href.startsWith('/jobs'),
     );
 
-    expect(visible.map((item) => item.href).sort()).toEqual([
-      '/jobs/connect',
-      '/jobs/feed',
-      '/jobs/saved',
-      '/jobs/search',
-    ]);
+    expect(jobItems).toHaveLength(1);
+    expect(jobItems[0]?.href).toBe('/jobs');
   });
 
-  it('sees no staff screen at all', () => {
+  it('shows it to a role holding the feed', () => {
     const visible = NAVIGATION.flatMap((section) => section.items)
-      .filter((item) => isVisibleTo(item, individual))
+      .filter((item) => isVisibleTo(item, sourcing))
       .map((item) => item.href);
 
-    // The four that previously declared no gate are the ones worth naming:
-    // before this feature they would have shown to anybody signed in.
-    for (const staffOnly of ['/dashboard', '/system', '/deployments/active', '/admin/users']) {
-      expect(visible).not.toContain(staffOnly);
-    }
-  });
-
-  it('is never offered as a role an administrator can assign', () => {
-    // Individuals register themselves. Listing the role in the admin picker
-    // would offer a choice the API refuses.
-    expect(ROLE_ORDER).not.toContain('INDIVIDUAL');
-  });
-
-  it('still sees the staff screens when signed in as staff', () => {
-    const sales = { role: 'SALES' as const, permissions: ['opportunity:read', 'deployment:read'] };
-    const visible = NAVIGATION.flatMap((section) => section.items)
-      .filter((item) => isVisibleTo(item, sales))
-      .map((item) => item.href);
-
+    expect(visible).toContain('/jobs');
+    // Still staff: the business screens did not go anywhere.
     expect(visible).toContain('/sales/pipeline');
-    expect(visible).not.toContain('/jobs/feed');
+  });
+
+  it('hides it from a role that does not hold the feed', () => {
+    const management = {
+      role: 'MANAGEMENT' as const,
+      permissions: ['opportunity:read', 'billing:read'],
+    };
+    const visible = NAVIGATION.flatMap((section) => section.items)
+      .filter((item) => isVisibleTo(item, management))
+      .map((item) => item.href);
+
+    expect(visible).not.toContain('/jobs');
+  });
+
+  it('no longer offers an external role an administrator could assign', () => {
+    expect(ROLE_ORDER).not.toContain('INDIVIDUAL');
+    expect(ROLE_ORDER).toEqual(['ADMIN', 'MANAGEMENT', 'SALES', 'HR_RESOURCING']);
   });
 });
 
@@ -266,7 +271,7 @@ function mockSearchApi(
 }
 
 describe('job search', () => {
-  beforeEach(() => signInAsIndividual());
+  beforeEach(() => signInWithFeed());
 
   it('says so when no provider is configured instead of offering a dead box', async () => {
     vi.stubGlobal('fetch', mockSearchApi({ available: false }));
@@ -276,15 +281,16 @@ describe('job search', () => {
     expect(screen.getByRole('button', { name: /^Search$/ })).toBeDisabled();
   });
 
-  it('warns that leaving the arrangement on Any returns unstated results', async () => {
-    // The provider only labels the arrangement when asked for one. Users
-    // should know that before they wonder why everything says "Not stated".
+  it('explains what an Any search costs, since that is how the filter works', async () => {
+    // The provider only labels the arrangement when asked for one, so an "Any"
+    // search has to ask three times for the arrangement filter to mean
+    // anything. That is real money, so the screen must say so rather than
+    // spending it quietly. Asserts the offer is explained, not its wording.
     vi.stubGlobal('fetch', mockSearchApi());
     render(<JobSearch />, { wrapper });
 
-    expect(
-      await screen.findByText(/most results arrive without a stated arrangement/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/thorough search/i)).toBeInTheDocument();
+    expect(screen.getByText(/three provider runs instead of one/i)).toBeInTheDocument();
   });
 
   it('will not search without a title', async () => {
@@ -295,13 +301,17 @@ describe('job search', () => {
     expect(screen.getByRole('button', { name: /^Search$/ })).toBeDisabled();
   });
 
-  it('sends the arrangement to the server rather than filtering afterwards', async () => {
+  it('asks the form for no arrangement, and fans out to get one instead', async () => {
+    // The arrangement is chosen beside the results, not before the search:
+    // the provider only reports it on a filtered run, so the way to filter a
+    // broad search afterwards is to have asked for all three up front.
     const fetchMock = mockSearchApi();
     vi.stubGlobal('fetch', fetchMock);
     render(<JobSearch />, { wrapper });
 
     await userEvent.type(await screen.findByLabelText('Job titles'), 'Python Developer');
-    await userEvent.selectOptions(screen.getByLabelText('Arrangement'), 'REMOTE');
+    expect(screen.queryByLabelText('Arrangement')).not.toBeInTheDocument();
+
     await userEvent.click(screen.getByRole('button', { name: /^Search$/ }));
 
     await waitFor(() => {
@@ -309,7 +319,9 @@ describe('job search', () => {
         (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
       );
       expect(posted).toBeDefined();
-      expect(String((posted![1] as RequestInit).body)).toContain('REMOTE');
+      const body = String((posted![1] as RequestInit).body);
+      expect(body).toContain('"thorough":true');
+      expect(body).toContain('"workplace_type":null');
     });
   });
 
@@ -327,78 +339,92 @@ describe('job search', () => {
   });
 });
 
-/* ------------------------------------------------------ connect alerts */
+/* ------------------------------------------------------- the handover tab */
 
-function mockConnectApi(connection: Record<string, unknown> = {}) {
-  return vi.fn((input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.includes('/alerts/connection')) {
-      return json({
-        enabled: true,
-        forwarding_address: 'jobs+abc123@jobs.glimmora.ai',
-        verified: false,
-        count: 0,
-        last_received_at: null,
-        ...connection,
-      });
-    }
-    return json({});
-  });
-}
+describe('shared-with-me section', () => {
+  beforeEach(() => signInWithFeed());
 
-describe('connecting LinkedIn alerts', () => {
-  beforeEach(() => signInAsIndividual());
-
-  it('does not claim LinkedIn is sending us anything', async () => {
-    // The honesty point. A "Connect with LinkedIn" button would make people
-    // believe LinkedIn delivers the jobs. Their forwarding rule does.
-    vi.stubGlobal('fetch', mockConnectApi());
-    render(<ConnectAlerts />, { wrapper });
-
-    expect(
-      await screen.findByText(/no way to send us your alerts directly/i),
-    ).toBeInTheDocument();
-  });
-
-  it('shows the private forwarding address', async () => {
-    vi.stubGlobal('fetch', mockConnectApi());
-    render(<ConnectAlerts />, { wrapper });
-
-    const field = await screen.findByLabelText('Your forwarding address');
-    expect(field).toHaveValue('jobs+abc123@jobs.glimmora.ai');
-  });
-
-  it('says nothing has arrived rather than implying it works', async () => {
-    vi.stubGlobal('fetch', mockConnectApi());
-    render(<ConnectAlerts />, { wrapper });
-
-    expect(await screen.findByText(/Not connected yet/i)).toBeInTheDocument();
-    expect(screen.getByText(/turns green on its own/i)).toBeInTheDocument();
-  });
-
-  it('confirms once alerts have actually been received', async () => {
+  it('is a section of its own, not a checkbox buried in the feed', async () => {
+    // Sales and Resourcing hand jobs to each other; that inbox has to be
+    // somewhere you can point at, not a filter you have to know about.
     vi.stubGlobal(
       'fetch',
-      mockConnectApi({ verified: true, count: 3, last_received_at: '2026-10-01T08:00:00Z' }),
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/counts')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                total: 1, unread: 1, saved: 0, shared: 1,
+                ONSITE: 0, REMOTE: 1, HYBRID: 0, UNKNOWN: 0,
+              }),
+              { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
+          );
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              items: [
+                makeItem({
+                  shared_by_name: 'Daniel Fernandes',
+                  shared_by_role: 'SALES',
+                  share_note: 'Good fit for the Milaha bench',
+                  shared_at: '2026-10-01T09:00:00Z',
+                }),
+              ],
+              total: 1, limit: 50, offset: 0,
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }),
     );
-    render(<ConnectAlerts />, { wrapper });
 
-    expect(await screen.findByText(/Receiving alerts/i)).toBeInTheDocument();
-    expect(screen.getByText(/3 jobs received/i)).toBeInTheDocument();
+    render(<JobFeed sharedOnly />, { wrapper });
+
+    expect(await screen.findByText('Shared with me')).toBeInTheDocument();
+    expect(await screen.findByText(/Daniel Fernandes/)).toBeInTheDocument();
+    expect(screen.getByText(/Good fit for the Milaha bench/)).toBeInTheDocument();
   });
 
-  it('warns when forwarding is not switched on yet', async () => {
-    vi.stubGlobal('fetch', mockConnectApi({ enabled: false }));
-    render(<ConnectAlerts />, { wrapper });
+  it('is where a job found off-platform is added, so it reaches the team', async () => {
+    signInWithFeed(['job_feed:read', 'job_feed:write', 'job_feed:share']);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ items: [], total: 0, limit: 50, offset: 0 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      ),
+    );
 
-    expect(await screen.findByText(/not switched on for this deployment/i)).toBeInTheDocument();
+    render(<JobFeed sharedOnly />, { wrapper });
+
+    expect(await screen.findByText(/Nothing shared with you yet/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Add a job/i }).length).toBeGreaterThan(0);
   });
 
-  it('offers pasting an alert so the feature works before any DNS', async () => {
-    vi.stubGlobal('fetch', mockConnectApi());
-    render(<ConnectAlerts />, { wrapper });
+  it('does not offer it to somebody who cannot share', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ items: [], total: 0, limit: 50, offset: 0 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      ),
+    );
 
-    expect(await screen.findByLabelText('The email')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Import into my feed/i })).toBeDisabled();
+    signInWithFeed(['job_feed:read', 'job_feed:write']);
+    render(<JobFeed sharedOnly />, { wrapper });
+
+    expect(await screen.findByText(/Nothing shared with you yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add a job/i })).not.toBeInTheDocument();
   });
 });

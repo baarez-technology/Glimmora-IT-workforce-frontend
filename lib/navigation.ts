@@ -63,47 +63,6 @@ export interface NavSection {
 
 export const NAVIGATION: NavSection[] = [
   {
-    // Individuals are not staff: they hold two permissions and would otherwise
-    // see an empty sidebar. These two items are the whole application for
-    // them, and are invisible to everyone else.
-    label: 'Jobs',
-    icon: Briefcase,
-    items: [
-      {
-        label: 'My Feed',
-        href: '/jobs/feed',
-        icon: ListChecks,
-        phase: 13,
-        permission: 'job_feed:read',
-        description: 'Jobs that reached you, private to your account',
-      },
-      {
-        label: 'Search',
-        href: '/jobs/search',
-        icon: FileSearch,
-        phase: 13,
-        permission: 'job_feed:read',
-        description: 'The open market, not your feed',
-      },
-      {
-        label: 'Connect Alerts',
-        href: '/jobs/connect',
-        icon: Send,
-        phase: 13,
-        permission: 'job_feed:read',
-        description: 'Forward your LinkedIn alerts into your feed',
-      },
-      {
-        label: 'Saved',
-        href: '/jobs/saved',
-        icon: BadgeCheck,
-        phase: 13,
-        permission: 'job_feed:read',
-        description: 'The roles you kept',
-      },
-    ],
-  },
-  {
     label: 'Overview',
     icon: LayoutDashboard,
     items: [
@@ -144,6 +103,20 @@ export const NAVIGATION: NavSection[] = [
         phase: 5,
         permission: 'requirement:read',
         description: 'Submission SLA board — VMS windows are 24–48 hours',
+      },
+    ],
+  },
+  {
+    label: 'Job Offers',
+    icon: Briefcase,
+    items: [
+      {
+        label: 'Job Offers',
+        href: '/jobs',
+        icon: Briefcase,
+        phase: 13,
+        permission: 'job_feed:read',
+        description: 'Market sourcing: your feed, search, handovers and saved roles',
       },
     ],
   },

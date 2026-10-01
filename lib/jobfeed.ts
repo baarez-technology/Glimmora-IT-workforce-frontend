@@ -28,10 +28,18 @@ export const WORKPLACE_VARIANT: Record<
 /** The order the filter chips appear in. */
 export const WORKPLACE_ORDER: WorkplaceType[] = ['REMOTE', 'HYBRID', 'ONSITE', 'UNKNOWN'];
 
+/**
+ * Where a posting came from.
+ *
+ * MANUAL reads "Added manually" rather than "Added by you": the posting is
+ * shared across everyone it reached, so a job one person typed in and passed
+ * to a colleague would otherwise tell the recipient they added it themselves.
+ * Who put it in *your* feed is the handover line on the card, not this badge.
+ */
 export const SOURCE_LABELS: Record<JobSource, string> = {
   LINKEDIN_ALERT: 'LinkedIn alert',
   SEARCH: 'Search',
-  MANUAL: 'Added by you',
+  MANUAL: 'Added manually',
 };
 
 /** "Doha, Qatar · Ras Laffan Logistics" — whichever parts exist. */

@@ -1,9 +1,11 @@
 'use client';
 
-import { Bookmark, BookmarkCheck, CheckCheck, ExternalLink, Plus } from 'lucide-react';
+import { Bookmark, BookmarkCheck, CheckCheck, ExternalLink, Plus, Send } from 'lucide-react';
 import * as React from 'react';
 
 import { AddJobDialog } from '@/components/jobfeed/add-job-dialog';
+import { ConfirmAction } from '@/components/confirm-action';
+import { ShareJobDialog } from '@/components/jobfeed/share-job-dialog';
 import { PageHeader } from '@/components/layout/page-header';
 import {
   EmptyState,
@@ -18,12 +20,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   useJobFeed,
+  useDeleteJob,
   useJobFeedCounts,
   useMarkAllJobsRead,
   useSetItemState,
 } from '@/hooks/use-jobfeed';
 import { useAuthStore } from '@/lib/auth-store';
 import { formatRelative } from '@/lib/format';
+import { ROLE_LABELS } from '@/lib/roles';
+import type { Role } from '@/types/api';
 import {
   SOURCE_LABELS,
   WORKPLACE_LABELS,
@@ -44,6 +49,8 @@ import type { JobFeedItem, WorkplaceType } from '@/types/jobfeed';
 
 function JobCard({ item }: { item: JobFeedItem }) {
   const state = useSetItemState(item.id);
+  const remove = useDeleteJob();
+  const can = useAuthStore((store) => store.can);
 
   return (
     <Card className={cn(!item.is_read && 'border-l-4 border-l-primary')}>
@@ -71,6 +78,24 @@ function JobCard({ item }: { item: JobFeedItem }) {
           <p className="mt-1 text-2xs text-muted-foreground">
             {formatRelative(item.received_at)}
           </p>
+
+          {item.shared_by_name ? (
+            <div className="mt-2 rounded-md border border-accent/40 bg-accent/5 px-2.5 py-1.5">
+              <p className="text-2xs">
+                <Send className="mr-1 inline h-3 w-3 align-[-2px] text-accent" aria-hidden />
+                Shared by{' '}
+                <span className="font-medium">{item.shared_by_name}</span>
+                {item.shared_by_role
+                  ? ` · ${ROLE_LABELS[item.shared_by_role as Role] ?? item.shared_by_role}`
+                  : ''}
+              </p>
+              {item.share_note ? (
+                <p className="mt-0.5 text-2xs italic text-muted-foreground">
+                  &ldquo;{item.share_note}&rdquo;
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
@@ -81,6 +106,18 @@ function JobCard({ item }: { item: JobFeedItem }) {
                 Open
               </a>
             </Button>
+          ) : null}
+          {can('job_feed:share') ? (
+            <ShareJobDialog
+              itemId={item.id}
+              jobTitle={item.title}
+              trigger={
+                <Button variant="outline" size="sm" aria-label={`Share ${item.title}`}>
+                  <Send aria-hidden />
+                  Share
+                </Button>
+              }
+            />
           ) : null}
           <Button
             variant="ghost"
@@ -96,13 +133,27 @@ function JobCard({ item }: { item: JobFeedItem }) {
               <Bookmark aria-hidden />
             )}
           </Button>
+          {can('job_feed:write') ? (
+            <ConfirmAction
+              label={`Remove ${item.title}`}
+              confirmLabel="Remove?"
+              iconOnly
+              isPending={remove.isPending}
+              successMessage="Removed from your feed."
+              errorMessage="That could not be removed."
+              onConfirm={() => remove.mutateAsync(item.id)}
+            />
+          ) : null}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-export function JobFeed({ savedOnly = false }: { savedOnly?: boolean } = {}) {
+export function JobFeed({
+  savedOnly = false,
+  sharedOnly = false,
+}: { savedOnly?: boolean; sharedOnly?: boolean } = {}) {
   const can = useAuthStore((state) => state.can);
 
   const [workplace, setWorkplace] = React.useState<WorkplaceType | ''>('');
@@ -120,9 +171,10 @@ export function JobFeed({ savedOnly = false }: { savedOnly?: boolean } = {}) {
     workplace_type: workplace,
     unread_only: unreadOnly,
     saved_only: savedOnly,
+    shared_only: sharedOnly,
     q: query,
   });
-  const counts = useJobFeedCounts();
+  const counts = useJobFeedCounts({ saved_only: savedOnly, shared_only: sharedOnly });
   const markAll = useMarkAllJobsRead();
 
   if (!can('job_feed:read')) return <PermissionDeniedState />;
@@ -134,15 +186,17 @@ export function JobFeed({ savedOnly = false }: { savedOnly?: boolean } = {}) {
   return (
     <>
       <PageHeader
-        title={savedOnly ? 'Saved jobs' : 'Your job feed'}
+        title={sharedOnly ? 'Shared with me' : savedOnly ? 'Saved jobs' : 'Your job feed'}
         description={
-          savedOnly
-            ? 'The roles you kept. Private to you.'
-            : 'Jobs that reached you, newest first. Only you can see this feed.'
+          sharedOnly
+            ? 'Jobs a colleague passed across. Add one here to send it the other way.'
+            : savedOnly
+              ? 'The roles you kept. Private to you.'
+              : 'Jobs that reached you, newest first. Only you can see this feed.'
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            {!savedOnly && unread > 0 ? (
+            {!savedOnly && !sharedOnly && unread > 0 ? (
               <Button
                 variant="outline"
                 onClick={() => markAll.mutate()}
@@ -152,7 +206,7 @@ export function JobFeed({ savedOnly = false }: { savedOnly?: boolean } = {}) {
                 Mark all read
               </Button>
             ) : null}
-            {can('job_feed:write') ? (
+            {can('job_feed:share') && sharedOnly ? (
               <Button onClick={() => setAddOpen(true)}>
                 <Plus aria-hidden />
                 Add a job
@@ -172,7 +226,7 @@ export function JobFeed({ savedOnly = false }: { savedOnly?: boolean } = {}) {
               className="max-w-xs"
               aria-label="Search your feed"
             />
-            {!savedOnly ? (
+            {!savedOnly && !sharedOnly ? (
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -183,6 +237,7 @@ export function JobFeed({ savedOnly = false }: { savedOnly?: boolean } = {}) {
                 Unread only
               </label>
             ) : null}
+
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -235,6 +290,19 @@ export function JobFeed({ savedOnly = false }: { savedOnly?: boolean } = {}) {
               setUnreadOnly(false);
             }}
           />
+        ) : sharedOnly ? (
+          <EmptyState
+            title="Nothing shared with you yet"
+            description="When Sales or Resourcing passes a job across, it lands here with a note about who sent it. Found one off-platform? Add it here and it goes straight to them."
+            action={
+              can('job_feed:share') ? (
+                <Button onClick={() => setAddOpen(true)}>
+                  <Plus aria-hidden />
+                  Add a job
+                </Button>
+              ) : undefined
+            }
+          />
         ) : savedOnly ? (
           <EmptyState
             title="Nothing saved yet"
@@ -243,15 +311,7 @@ export function JobFeed({ savedOnly = false }: { savedOnly?: boolean } = {}) {
         ) : (
           <EmptyState
             title="No jobs yet"
-            description="Once your LinkedIn alerts are connected they will arrive here. In the meantime you can add a job you found elsewhere."
-            action={
-              can('job_feed:write') ? (
-                <Button onClick={() => setAddOpen(true)}>
-                  <Plus aria-hidden />
-                  Add a job
-                </Button>
-              ) : undefined
-            }
+            description="Search the open market and save what is worth keeping. A job found off-platform is added from Shared with me, so it reaches the team rather than only you."
           />
         )
       ) : (

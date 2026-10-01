@@ -41,7 +41,7 @@ import type { Role } from '@/types/api';
  * CURRENT_PHASE renders an honest "not built yet" page rather than a dead link —
  * navigation is never a fake button.
  */
-export const CURRENT_PHASE = 12;
+export const CURRENT_PHASE = 13;
 
 export interface NavItem {
   label: string;
@@ -63,6 +63,31 @@ export interface NavSection {
 
 export const NAVIGATION: NavSection[] = [
   {
+    // Individuals are not staff: they hold two permissions and would otherwise
+    // see an empty sidebar. These two items are the whole application for
+    // them, and are invisible to everyone else.
+    label: 'Jobs',
+    icon: Briefcase,
+    items: [
+      {
+        label: 'My Feed',
+        href: '/jobs/feed',
+        icon: ListChecks,
+        phase: 13,
+        permission: 'job_feed:read',
+        description: 'Jobs that reached you, private to your account',
+      },
+      {
+        label: 'Saved',
+        href: '/jobs/saved',
+        icon: BadgeCheck,
+        phase: 13,
+        permission: 'job_feed:read',
+        description: 'The roles you kept',
+      },
+    ],
+  },
+  {
     label: 'Overview',
     icon: LayoutDashboard,
     items: [
@@ -71,6 +96,7 @@ export const NAVIGATION: NavSection[] = [
         href: '/dashboard',
         icon: Gauge,
         phase: 11,
+        roles: ['ADMIN', 'MANAGEMENT', 'SALES', 'HR_RESOURCING'],
         description: 'Role-aware view of the demand-to-billing funnel',
       },
     ],
@@ -258,6 +284,7 @@ export const NAVIGATION: NavSection[] = [
         href: '/deployments/active',
         icon: FileSearch,
         phase: 11,
+        permission: 'deployment:read',
         description: 'Consultants currently deployed and billing',
       },
       {
@@ -265,6 +292,7 @@ export const NAVIGATION: NavSection[] = [
         href: '/deployments/ending-soon',
         icon: Timer,
         phase: 11,
+        permission: 'deployment:read',
         description: '90 / 60 / 30 / 15 / 7-day horizons',
       },
       {
@@ -372,6 +400,7 @@ export const NAVIGATION: NavSection[] = [
         href: '/system',
         icon: HeartPulse,
         phase: 2,
+        roles: ['ADMIN', 'MANAGEMENT', 'SALES', 'HR_RESOURCING'],
         description: 'Dependency health, active fallbacks and build progress',
       },
     ],

@@ -81,7 +81,7 @@ export interface PublicConfig {
 
 /* ------------------------------------------------------- identity (Phase 3) */
 
-export type Role = 'ADMIN' | 'MANAGEMENT' | 'SALES' | 'HR_RESOURCING';
+export type Role = 'ADMIN' | 'MANAGEMENT' | 'SALES' | 'HR_RESOURCING' | 'INDIVIDUAL';
 
 export interface CurrentUser {
   id: string;

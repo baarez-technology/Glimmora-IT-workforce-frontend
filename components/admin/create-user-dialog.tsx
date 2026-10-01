@@ -34,7 +34,8 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-const ROLE_HINTS: Record<Role, string> = {
+/** Staff roles only — an individual registers themselves. */
+const ROLE_HINTS: Record<Exclude<Role, 'INDIVIDUAL'>, string> = {
   ADMIN: 'Full control, including users, scoring rules and the audit trail.',
   MANAGEMENT: 'Reads the whole business including cost and margin. Cannot administer users.',
   SALES: 'Demand, accounts and submissions. Sees bill rates and margin, not consultant cost.',

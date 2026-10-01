@@ -133,11 +133,14 @@ describe('navigation', () => {
     );
   });
 
-  it('assigns every item a delivering phase', () => {
+  it('assigns every item a delivering phase that has shipped', () => {
+    // Bounded by CURRENT_PHASE rather than a literal: an item claiming a
+    // future phase renders the "not built yet" page, so this catches a nav
+    // entry added before its screen exists.
     for (const section of NAVIGATION) {
       for (const item of section.items) {
         expect(item.phase).toBeGreaterThanOrEqual(2);
-        expect(item.phase).toBeLessThanOrEqual(12);
+        expect(item.phase).toBeLessThanOrEqual(CURRENT_PHASE);
       }
     }
   });

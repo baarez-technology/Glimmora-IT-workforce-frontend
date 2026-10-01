@@ -31,7 +31,7 @@ import type { SearchResult, WorkplaceType } from '@/types/jobfeed';
  * until it is saved, because one broad query would otherwise bury a person's
  * feed under fifty jobs they never asked for.
  *
- * A provider run takes about thirty seconds, so this starts a search and polls
+ * A provider run takes roughly thirty to ninety seconds, so this starts a search and polls
  * for it rather than holding a request open.
  */
 
@@ -253,7 +253,7 @@ export function JobSearch() {
             <div>
               <p className="text-sm font-medium">Searching…</p>
               <p className="text-xs text-muted-foreground">
-                This takes about thirty seconds. The results are kept for a while, so the same
+                This usually takes thirty to ninety seconds. The results are kept for a while, so the same
                 search again is instant.
               </p>
             </div>

@@ -320,7 +320,10 @@ describe('job search', () => {
     await userEvent.type(await screen.findByLabelText('Job titles'), 'Developer');
     await userEvent.click(screen.getByRole('button', { name: /^Search$/ }));
 
-    expect(await screen.findByText(/about thirty seconds/i)).toBeInTheDocument();
+    // Matched on the duration, not the exact sentence: the point of the test is
+    // that waiting is explained at all, and pinning the wording made a copy
+    // correction look like a regression.
+    expect(await screen.findByText(/seconds/i)).toBeInTheDocument();
   });
 });
 
